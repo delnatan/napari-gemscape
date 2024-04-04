@@ -1,0 +1,108 @@
+#+PROPERTY: header-args:python :session py
+#+PROPERTY: header-args:python+ :async yes
+#+PROPERTY: header-args:python+ :kernel gemanalysis
+
+
+* Improving ensemble MSD plot 
+When looking at an ensemble MSD plots sometimes it's helpful to see how many trajectories go into averaging each segment of the plot. Here, we overlay the counts of data points per /lag/ time τ to visualize that longer tracks are more rare (The flat line for the first few points is because I imposed a minimum track length of 5 for this particular dataset).
+
+#+begin_src python
+  import h5py
+  import pandas as pd
+  import numpy as np
+  import matplotlib.pyplot as plt
+
+  root = "/Users/delnatan/StarrLuxtonLab/Projects/Rebecca"
+  with h5py.File(f"{root}/240227_hTertASM_cytGEM_control_water_0001.h5") as fhd:
+      cytoanalysis = fhd["analyses"]["cytoplasm analysis"]
+      ensemble_MSD = cytoanalysis["MSD analysis"]
+      mobile_MSD = ensemble_MSD["mobile ensemble"]
+      colnames = mobile_MSD.dtype.names
+      df = pd.DataFrame.from_records(mobile_MSD, columns=colnames)
+
+  plt.style.use("ggplot")
+
+  fig, ax = plt.subplots(figsize=(4,3))
+  ax.errorbar(df["lag"], df["mean"], yerr=df["std"]/np.sqrt(df["count"]),
+              fmt='o', mec='k', mew=1.25, mfc='w', ecolor='#b5b5b5', elinewidth=1.2,
+              capsize=3, zorder=10)
+
+  ax.set_xlabel("$\\tau$, seconds")
+  ax.set_ylabel("MSD, $\mu m^2/s$")
+  ax2 = ax.twinx()
+
+  ax2.plot(df["lag"], df["count"], drawstyle="steps-mid", c="#8095ab",
+           zorder=-10)
+  ax2.tick_params(axis='y', labelcolor="#8095ab", colors='#8095ab')
+  ax2.set_ylabel("# tracks", color='#8095ab')
+  ax2.grid(False)
+
+
+#+end_src
+
+#+RESULTS:
+[[./.ob-jupyter/51d56275be5b1aaf6dfc22ccc55bf2c31ae43db2.png]]
+
+
+* Visualizing mobile/stationary tracks
+
+- [ ] Don't separate mobile/stationary trajectories, simply color code them. Only split them up during the MSD analysis. Save *all* the tracks.
+  
+- [ ] Figure out if we can compute some probabilities related to motion by looking at the posterior of the parameters.
+Load data file
+
+#+begin_src python
+  import napari
+  import pandas as pd
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from napari_gemscape.utils import compute_track_stats
+
+  df = pd.read_csv("track_data.csv")
+
+  # do a groupby operation on each particle
+  pdf = df.groupby("particle", group_keys=True).apply(compute_track_stats).reset_index()
+
+  df2 = df.merge(pdf, on="particle")
+
+  print(df2.head())
+#+end_src
+
+#+RESULTS:
+#+begin_example
+     frame           y           x           A          bg   x0   y0     x_std  \
+  0      0  207.193652  547.843651   78.692906  105.358919  548  207  0.126984   
+  1      1  208.152825  547.464330  106.283541  105.241513  547  208  0.091419   
+  2      2  207.824857  547.600046   52.411399  103.067865  547  208  0.185164   
+  3      3  207.026471  548.063039   65.855296  103.750465  548  207  0.154789   
+  4      4  206.870475  547.153873   76.321232  104.575487  547  207  0.147473   
+
+        y_std     sigma  ...    xy_std  particle  step_length  step_sigma  \
+  0  0.118448  1.744666  ...  0.173651         0          NaN         NaN   
+  1  0.092757  1.499522  ...  0.130236         0     1.031454    0.217062   
+  2  0.169793  1.985362  ...  0.251228         0     0.354939    0.282979   
+  3  0.140136  1.853671  ...  0.208800         0     0.922921    0.326670   
+  4  0.131761  1.692810  ...  0.197760         0     0.922452    0.287588   
+
+     prob_mobile_x  motion  track_id        Rg prob_mobile_y  track_length  
+  0            NaN  mobile         0  0.930392      0.879871            20  
+  1       0.999988  mobile         0  0.930392      0.879871            20  
+  2       0.544622  mobile         0  0.930392      0.879871            20  
+  3       0.981519  mobile         0  0.930392      0.879871            20  
+  4       0.994167  mobile         0  0.930392      0.879871            20  
+
+  [5 rows x 23 columns]
+#+end_example
+
+#+begin_src python
+  fig, ax = plt.subplots()
+
+  ax.plot(np.random.randn(50), 'k.')
+  ax.set_xlabel("$\\tau$")
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: Text(0.5, 0, '$\\tau$')
+[[./.ob-jupyter/d1fc107a8d03061dc6da75dd0a16a95667fd3b93.png]]
+:END:
