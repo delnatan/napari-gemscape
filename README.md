@@ -20,24 +20,18 @@ https://github.com/napari/cookiecutter-napari-plugin#getting-started
 and review the napari docs for plugin developers:
 https://napari.org/stable/plugins/index.html
 -->
+## Note
+The repo is one of the tools we use in lab to analyze GEMs movies. It depends on my other package that does 2D Gaussian localization [[https://github.com/delnatan/spotfitlm]]
 
 ## Installation
-
-You can install `napari-gemscape` via [pip]:
-
-    pip install napari-gemscape
-
-
 
 To install latest development version :
 
     pip install git+https://github.com/delnatan/napari-gemscape.git
 
+Or, download this repo, go into the `napari-gemscape` directory and then run:
 
-## Contributing
-
-Contributions are very welcome. Tests can be run with [tox], please ensure
-the coverage at least stays the same before you submit a pull request.
+	pip install -e .
 
 ## License
 
