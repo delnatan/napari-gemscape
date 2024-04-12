@@ -128,6 +128,8 @@ class InputFileList(QListWidget):
         self.folder_path = folder_path
 
         for file_path in self.folder_path.iterdir():
+            if file_path.name.startswith("."):
+                continue
             if file_path.suffix.lower() in SUPPORTED_FORMATS:
                 _item = self.add_item(file_path)
                 if file_path.with_suffix(".h5").exists():
