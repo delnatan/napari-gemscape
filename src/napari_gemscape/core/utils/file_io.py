@@ -12,10 +12,10 @@ import pandas as pd
 import tifffile
 from napari.layers import Image, Labels, Points, Tracks
 from napari.types import LayerData
+from napari_gemscape.widgets import Parameter
 
 if TYPE_CHECKING:
-    from ..widgets import EasyGEMsWidget
-
+    from napari_gemscape.gemscape_widget import EasyGEMsWidget
 
 PathLike = Union[str, Path]
 ReaderFunction = Callable[[Path], List[LayerData]]
@@ -151,36 +151,27 @@ def save_parameters_to_hdf5(file_handle: h5py.File, parameters: dict):
     """
     parameters_group = file_handle.require_group("parameters")
 
-    spot_finding_group = parameters_group.require_group("spot_finding")
+    for step in ["spot_finding", "linking", "analysis"]:
+        step_group = parameters_group.require_group(step)
+        save_step_parameters(step_group, parameters[step])
 
-    for parname, par in parameters["spot_finding"].items():
-        if isinstance(par.value, (Image, Labels)):
-            spot_finding_group.attrs[parname] = par.value.name
-        else:
-            if par.value is None:
-                spot_finding_group.attrs[parname] = "None"
-            else:
-                spot_finding_group.attrs[parname] = par.value
 
-    linking_group = parameters_group.require_group("linking")
-    for parname, par in parameters["linking"].items():
-        if isinstance(par.value, Points):
-            linking_group.attrs[parname] = par.value.name
-        else:
-            if par.value is None:
-                linking_group.attrs[parname] = "None"
-            else:
-                linking_group.attrs[parname] = par.value
+def save_step_parameters(group, params):
+    """Helper function to save parameters of a specific analysis step to a group."""
+    for parname, par in params.items():
+        group.attrs[parname] = get_parameter_value(par)
 
-    analysis_group = parameters_group.require_group("analysis")
-    for parname, par in parameters["analysis"].items():
-        if isinstance(par.value, Tracks):
-            analysis_group.attrs[parname] = par.value.name
-        else:
-            if par.value is None:
-                analysis_group.attrs[parname] = "None"
-            else:
-                analysis_group.attrs[parname] = par.value
+
+def get_parameter_value(par):
+    """Return the appropriate representation of the parameter for HDF5 attributes."""
+    if isinstance(par, Parameter):
+        return (
+            par.value.name
+            if isinstance(par.value, (Image, Labels, Points, Tracks))
+            else ("None" if par.value is None else par.value)
+        )
+    else:
+        return "None" if par is None else par
 
 
 def save_masks_to_hdf5(
@@ -226,6 +217,28 @@ def save_dict_to_hdf5(hdf_file: h5py.File, d: dict, parent_group="/"):
             hdf_file[parent_group + key] = value
         else:
             raise ValueError(f"Unsupported data type: {type(value)}")
+
+
+def extract_parameter_values(d):
+    # import here to avoid import clashes with top-level modules
+    if isinstance(d, dict):
+        return {
+            key: extract_parameter_values(value) for key, value in d.items()
+        }
+    elif isinstance(d, Parameter):
+        return d.value
+    else:
+        return d
+
+
+def print_dict(d: dict, indent=0):
+    for key, value in d.items():
+        print("  " * indent + str(key) + ":", end=" ")
+        if isinstance(value, dict):
+            print()  # Print a newline before recursing
+            print_dict(value, indent + 1)
+        else:
+            print(value)
 
 
 def save_state_to_hdf5(

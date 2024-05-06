@@ -10,8 +10,7 @@ used in a GEM analysis pipeline.
 import pandas as pd
 import trackpy as tp
 from napari.layers import Points, Tracks
-
-from .utils import (
+from napari_gemscape.core.utils import (
     compute_msd,
     compute_track_quantities,
     compute_track_stats,

@@ -3,6 +3,8 @@ This file contains the 'main' GEMscape widget for analyzing GEMs data
 
 """
 
+import json
+import os
 from pathlib import Path
 from typing import List
 
@@ -24,14 +26,16 @@ from qtpy.QtWidgets import (
 )
 from spotfitlm.utils import find_spots_in_timelapse
 
-from . import analysis
-from . import utils as u
-from .utils import (
+from napari_gemscape.core import analysis
+from napari_gemscape.core import utils as u
+from napari_gemscape.core.utils import (
+    extract_parameter_values,
     gemscape_get_reader,
     load_dict_from_hdf5,
     load_state,
     save_state_to_hdf5,
 )
+
 from .widgets import (
     CodeEditor,
     FilepathItem,
@@ -594,19 +598,36 @@ class EasyGEMsWidget(QWidget, SharedState):
             for item in self.fileListWidget.items()
         ]
 
+        # get analysis parameters
+        pars = self.shared_parameters
+
+        # extract parameter values from 'shared_parameters' (set by GUI)
+        batch_parameters = extract_parameter_values(pars)
+
+        # write parameters to batch directory
+        batch_directory = self.fileListWidget.folder_path
+
+        with open(batch_directory / "analysis_parameters.json", "w") as f:
+            json.dump(batch_parameters, f, indent=4)
+
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.handle_batch_stdout)
+        self.process.readyReadStandardError.connect(self.handle_batch_stderr)
         self.process.finished.connect(self.batch_processing_finished)
-        self.process.errorOccurred.connect(self.batch_error)
 
         # execute batch processing
-        self.process.start(
-            "python", [f"{str(__modulepath__)}/batch_process.py", task] + flist
-        )
+        script_path = os.path.join(__modulepath__, "core/batch_process.py")
+        config_path = batch_directory / "analysis_parameters.json"
 
-        if not self.process.waitForStarted():
-            print("failed to start batch processing")
-            return
+        exec_str = [script_path, task] + flist + ["--config", str(config_path)]
+
+        self.process.start("python", exec_str)
+
+        # wait 10 seconds for timeout
+        started = self.process.waitForStarted(10_000)
+
+        if not started:
+            print("Batch process failed to start")
 
     def handle_batch_stdout(self):
         data = self.process.readAllStandardOutput().data().decode()
@@ -621,8 +642,10 @@ class EasyGEMsWidget(QWidget, SharedState):
     def batch_processing_finished(self):
         self.batchProgressBar.setValue(100)
 
-    def batch_error(self, error):
-        print(f"Error occurred: {error}")
+    def handle_batch_stderr(self):
+        error_data = self.process.readAllStandardError().data().decode()
+        print("Batch script error:")
+        print(error_data)
 
 
 class SimpleMovieRecorderWidget(QWidget):

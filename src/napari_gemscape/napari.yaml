@@ -14,10 +14,10 @@ contributions:
     python_name: napari_gemscape.widgets.plot_widgets:StackedPlotWidget
   - id: napari-gemscape.read_imaris_timelapse
     title: Read ".ims" timelapse file
-    python_name: napari_gemscape.utils:get_reader
+    python_name: napari_gemscape.core.utils:get_reader
   - id: napari-gemscape.SimpleMovieRecorderWidget
     title: Simple timelapse screen-capture to MP4
-    python_name: napari_gemscape.utils.miscellaneous:record_timelapse_movie
+    python_name: napari_gemscape.core.utils.miscellaneous:record_timelapse_movie
 
   readers:
   - command: napari-gemscape.read_imaris_timelapse

@@ -18,7 +18,10 @@ __all__ = [
     "fit_msds",
     "read_image",
     "save_state_to_hdf5",
+    "save_dict_to_hdf5",
+    "save_parameters_to_hdf5",
     "load_dict_from_hdf5",
     "print_dict_keys",
     "get_reader",
+    "print_dict",
 ]
