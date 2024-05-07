@@ -110,8 +110,8 @@ class EasyGEMsWidget(QWidget, SharedState):
         self.batchTaskChoices.addItem("analyse GEMs")
         inputLayout.addWidget(self.batchTaskChoices)
 
-        batchProcessButton = QPushButton("Do it!")
-        inputLayout.addWidget(batchProcessButton)
+        self.batchProcessButton = QPushButton("Do it!")
+        inputLayout.addWidget(self.batchProcessButton)
 
         self.batchProgressBar = QProgressBar()
         inputLayout.addWidget(self.batchProgressBar)
@@ -123,7 +123,7 @@ class EasyGEMsWidget(QWidget, SharedState):
         # hook up input file widget behavior
         self.fileListWidget.currentItemChanged.connect(self.load_image)
 
-        batchProcessButton.clicked.connect(self.start_batch_process)
+        self.batchProcessButton.clicked.connect(self.start_batch_process)
 
         ########################################################################
         # SPOT FINDING WIDGET                                                  #
@@ -613,6 +613,7 @@ class EasyGEMsWidget(QWidget, SharedState):
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.handle_batch_stdout)
         self.process.readyReadStandardError.connect(self.handle_batch_stderr)
+        self.process.started.connect(self.batch_process_started)
         self.process.finished.connect(self.batch_processing_finished)
 
         # execute batch processing
@@ -629,6 +630,14 @@ class EasyGEMsWidget(QWidget, SharedState):
         if not started:
             print("Batch process failed to start")
 
+    def stop_batch_process(self):
+        self.process.kill()
+
+    def batch_process_started(self):
+        self.batchProcessButton.setText("Stop it!")
+        self.batchProcessButton.disconnect()
+        self.batchProcessButton.clicked.connect(self.stop_batch_process)
+
     def handle_batch_stdout(self):
         data = self.process.readAllStandardOutput().data().decode()
         lines = data.strip().split("\n")
@@ -641,6 +650,9 @@ class EasyGEMsWidget(QWidget, SharedState):
 
     def batch_processing_finished(self):
         self.batchProgressBar.setValue(100)
+        self.batchProcessButton.setText("Do it!")
+        self.batchProcessButton.disconnect()
+        self.batchProcessButton.clicked.connect(self.start_batch_process)
 
     def handle_batch_stderr(self):
         error_data = self.process.readAllStandardError().data().decode()
