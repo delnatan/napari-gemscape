@@ -1,7 +1,8 @@
 """
-this file contains functions that carry out 'batch' processing from the widget's
-list of files. Progress on the batch processing is monitored via stdout by
-printing "PROGRESS:<int>" where the integer has to be a value from 0 to 100.
+this file contains functions that carry out 'batch' processing from the
+widget's list of files. Progress on the batch processing is monitored via
+stdout by printing "PROGRESS:<int>" where the integer has to be a value from 0
+to 100.
 
 This is done by parsing the string and checking to see if it's starts with
 'PROGRESS:', then taking the second element of the results after splitting it
@@ -16,6 +17,7 @@ import time
 from pathlib import Path
 
 import h5py
+import pandas as pd
 from napari_gemscape.core.utils import (
     gemscape_get_reader,
     save_dict_to_hdf5,
@@ -164,6 +166,54 @@ def process_files(task, file_list, config):
             except Exception as e:
                 print(f"for loop error: {str(e)}", file=sys.stderr)
                 sys.stdout.flush()
+
+    if task == "compile MSDs":
+        print("compiling MSDs -- batch mode")
+        sys.stdout.flush()
+
+        en_dflist = []
+        ta_dflist = []
+
+        parentdir = Path(file_list[0]).parent
+
+        for i, fn in enumerate(file_list, 1):
+            # convert file string to path
+            fp = Path(fn)
+            h5path = fp.with_suffix(".h5")
+
+            progress = int((i / total_files) * 100)
+            print(f"PROGRESS:{progress}")
+            sys.stdout.flush()
+
+            try:
+
+                with h5py.File(h5path) as hdf:
+                    g = hdf["analyses/analysis/MSD analysis"]
+                    men = g["mobile ensemble"]
+                    mta = g["mobile time-averaged"]
+
+                    emsd = pd.DataFrame.from_records(
+                        men, columns=men.dtype.names
+                    )
+                    imsd = pd.DataFrame.from_records(
+                        mta, columns=mta.dtype.names
+                    )
+                    emsd.insert(0, "filename", fp.name)
+                    imsd.insert(0, "filename", fp.name)
+
+                en_dflist.append(emsd)
+                ta_dflist.append(imsd)
+
+            except FileNotFoundError:
+                # skip if there are no HDF5 files found
+                continue
+
+        en_df_col = pd.concat(en_dflist, ignore_index=True)
+        ta_df_col = pd.concat(ta_dflist, ignore_index=True)
+
+        # save the dataframe
+        en_df_col.to_csv(parentdir / "ensemble_MSD.csv", index=False)
+        ta_df_col.to_csv(parentdir / "timeavg_MSD.csv", index=False)
 
 
 if __name__ == "__main__":

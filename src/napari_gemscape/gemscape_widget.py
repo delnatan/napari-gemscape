@@ -108,6 +108,8 @@ class EasyGEMsWidget(QWidget, SharedState):
         self.batchTaskChoices = QComboBox()
         self.batchTaskChoices.addItem("test")
         self.batchTaskChoices.addItem("analyse GEMs")
+        self.batchTaskChoices.addItem("compile MSDs")
+
         inputLayout.addWidget(self.batchTaskChoices)
 
         self.batchProcessButton = QPushButton("Do it!")

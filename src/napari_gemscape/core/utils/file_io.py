@@ -157,13 +157,15 @@ def save_parameters_to_hdf5(file_handle: h5py.File, parameters: dict):
 
 
 def save_step_parameters(group, params):
-    """Helper function to save parameters of a specific analysis step to a group."""
+    """Helper function to save parameters of a specific analysis step to a
+    group."""
     for parname, par in params.items():
         group.attrs[parname] = get_parameter_value(par)
 
 
 def get_parameter_value(par):
-    """Return the appropriate representation of the parameter for HDF5 attributes."""
+    """Return the appropriate representation of the parameter for HDF5
+    attributes."""
     if isinstance(par, Parameter):
         return (
             par.value.name
@@ -226,6 +228,8 @@ def extract_parameter_values(d):
             key: extract_parameter_values(value) for key, value in d.items()
         }
     elif isinstance(d, Parameter):
+        if isinstance(d.value, (Image, Labels, Tracks, Points)):
+            return d.name
         return d.value
     else:
         return d
