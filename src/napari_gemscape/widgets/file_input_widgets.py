@@ -35,6 +35,7 @@ class FilepathItem(QListWidgetItem):
         # default is "untouched"
         status_indicator = {
             "untouched": "•",
+            "skip": "X",
             "in progress": "—",
             "complete": "✓",
         }.get(self.status, "•")
@@ -74,8 +75,9 @@ class InputFileList(QListWidget):
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             current_index = self.currentRow()
-            self.takeItem(current_index)
-            self.itemDeleted.emit(self.count())
+            # delete does not actually remove item but
+            # changes its status to 'skip'
+            self.item(current_index).set_status("skip")
 
         if e.key() == Qt.Key_Up:
             current_index = self.currentRow()

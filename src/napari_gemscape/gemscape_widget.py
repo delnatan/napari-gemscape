@@ -312,9 +312,9 @@ class EasyGEMsWidget(QWidget, SharedState):
             # replace data if already there
             self.viewer.layers[points_layer_name].data = coords
             self.viewer.layers[points_layer_name].features = result
-            self.viewer.layers[points_layer_name].size = (
-                self.shared_parameters["spot_finding"]["boxsize"].value
-            )
+            self.viewer.layers[
+                points_layer_name
+            ].size = self.shared_parameters["spot_finding"]["boxsize"].value
         else:
             self.viewer.add_points(
                 coords,
@@ -598,6 +598,7 @@ class EasyGEMsWidget(QWidget, SharedState):
         flist = [
             str(item.file_path.resolve())
             for item in self.fileListWidget.items()
+            if item.status not in ["skip", "complete"]
         ]
 
         # get analysis parameters
@@ -668,7 +669,6 @@ class SimpleMovieRecorderWidget(QWidget):
 
 
 if __name__ == "__main__":
-
     # run this script by going into root 'easy_gems'
     # then 'python -m easy_gems.easy_gems'
 
