@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Optional, Union
 
+import dask.array as da
 import h5py
 import mrc
 import napari
@@ -12,6 +13,7 @@ import pandas as pd
 import tifffile
 from napari.layers import Image, Labels, Points, Tracks
 from napari.types import LayerData
+
 from napari_gemscape.widgets import Parameter
 
 if TYPE_CHECKING:
@@ -31,7 +33,9 @@ def get_reader(path: PathLike):
     def _reader(path):
         image_reader = gemscape_get_reader(path)
         image_data = image_reader(path)
-        clo, chi = np.percentile(image_data, (0.01, 99.9))
+
+        clo, chi = np.percentile(image_data.ravel(), (0.1, 99.8))
+
         return [
             (
                 image_data,
@@ -52,7 +56,7 @@ def gemscape_get_reader(path: PathLike) -> Optional[ReaderFunction]:
 
     if path.suffix in FILE_FORMATS:
         if path.suffix == ".nd2":
-            return nd2.imread
+            return lambda fn: nd2.imread(fn, dask=True)
         if path.suffix == ".dv":
             return mrc.imread
         if path.suffix == ".tif" or path.suffix == ".tiff":
@@ -65,9 +69,7 @@ def gemscape_get_reader(path: PathLike) -> Optional[ReaderFunction]:
 
 
 def read_imaris_timelapse(path: Path) -> LayerData:
-
     with h5py.File(path) as fhd:
-
         image_metadata = {}
 
         for key, value in fhd["DataSetInfo"]["Image"].attrs.items():
@@ -351,6 +353,6 @@ def load_state(
         for outer_key in parameters:
             for inner_key in parameters[outer_key]:
                 if inner_key not in ["image", "mask", "points", "tracks"]:
-                    w.shared_parameters[outer_key][inner_key].value = (
-                        parameters[outer_key][inner_key]
-                    )
+                    w.shared_parameters[outer_key][
+                        inner_key
+                    ].value = parameters[outer_key][inner_key]

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import List
 
+import dask.array as da
 import h5py
 import napari
 import numpy as np
@@ -561,7 +562,12 @@ class EasyGEMsWidget(QWidget, SharedState):
         image = file_reader(filepath)
 
         # get contrast limits
-        clo, chi = np.percentile(image, (0.01, 99.9))
+        clo, chi = np.percentile(image.ravel(), (0.01, 99.9))
+
+        if isinstance(clo, da.Array):
+            clo = clo.compute()
+        if isinstance(chi, da.Array):
+            chi = chi.compute()
 
         self.viewer.layers.clear()
         self.viewer.add_image(
