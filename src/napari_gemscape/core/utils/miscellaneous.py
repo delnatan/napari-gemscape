@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import imageio
+import numpy as np
 from napari import Viewer
 
 
@@ -68,3 +69,16 @@ def print_dict_keys(d, level=0):
                     + type(value).__name__
                     + ")"
                 )
+
+
+def convert_numpy_types(obj):
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")

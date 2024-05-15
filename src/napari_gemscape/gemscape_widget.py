@@ -30,6 +30,7 @@ from spotfitlm.utils import find_spots_in_timelapse
 from napari_gemscape.core import analysis
 from napari_gemscape.core import utils as u
 from napari_gemscape.core.utils import (
+    convert_numpy_types,
     extract_parameter_values,
     gemscape_get_reader,
     load_dict_from_hdf5,
@@ -601,11 +602,21 @@ class EasyGEMsWidget(QWidget, SharedState):
 
     def start_batch_process(self):
         task = self.batchTaskChoices.currentText()
-        flist = [
-            str(item.file_path.resolve())
-            for item in self.fileListWidget.items()
-            if item.status not in ["skip", "complete"]
-        ]
+
+        if task == "analyze GEMs":
+            # skip ones that are already done
+            flist = [
+                str(item.file_path.resolve())
+                for item in self.fileListWidget.items()
+                if item.status not in ["skip", "complete"]
+            ]
+        else:
+            # otherwise just give the entire list (the checking should
+            # be done by the batch processing function)
+            flist = [
+                str(item.file_path.resolve())
+                for item in self.fileListWidget.items()
+            ]
 
         # get analysis parameters
         pars = self.shared_parameters
@@ -617,7 +628,9 @@ class EasyGEMsWidget(QWidget, SharedState):
         batch_directory = self.fileListWidget.folder_path
 
         with open(batch_directory / "analysis_parameters.json", "w") as f:
-            json.dump(batch_parameters, f, indent=4)
+            json.dump(
+                batch_parameters, f, indent=4, default=convert_numpy_types
+            )
 
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.handle_batch_stdout)
