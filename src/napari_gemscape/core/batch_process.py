@@ -16,16 +16,16 @@ import sys
 import time
 from pathlib import Path
 
+import analysis
 import h5py
 import pandas as pd
+from spotfitlm.utils import find_spots_in_timelapse
+
 from napari_gemscape.core.utils import (
     gemscape_get_reader,
     save_dict_to_hdf5,
     save_parameters_to_hdf5,
 )
-from spotfitlm.utils import find_spots_in_timelapse
-
-import analysis
 
 
 def parse_args():
@@ -52,8 +52,55 @@ def load_configuration(file_path):
     return {}
 
 
-def analyze_single_timelapse(file_in, timelapse, parameters):
+def compile_dataframes(hdf5_files, dataset_name="mobile ensemble"):
+    analysis_dict = {}
 
+    for i, file in enumerate(hdf5_files, start=1):
+        print(f"PROGRESS:{i}")
+        sys.stdout.flush()
+
+        try:
+            with h5py.File(file, "r") as f:
+                analyses_group = f["analyses"]
+
+                if analyses_group is None:
+                    print(f"No 'analyses' has been done for {file}.")
+                    sys.stdout.flush()
+                    continue
+
+                for analysis_type in analyses_group:
+                    try:
+                        datagroupstr = f"analyses/{analysis_type}/MSD analysis/{dataset_name}"
+                        dataset = f[datagroupstr]
+                    except Exception as e:
+                        print(f"Error : {e}")
+                        sys.stdout.flush()
+                        print(f"-----> Can't find {file}[{datagroupstr}]")
+                        sys.stdout.flush()
+                        continue
+
+                    if dataset is None:
+                        print(f"Can't find {file}.../{dataset_name}")
+                        sys.stdout.flush()
+                        continue
+
+                    df = pd.DataFrame.from_records(
+                        dataset, columns=dataset.dtype.names
+                    )
+                    df.insert(0, "source_file", file.stem)
+
+                    if analysis_type not in analysis_dict:
+                        analysis_dict[analysis_type] = []
+                    analysis_dict[analysis_type].append(df)
+
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+            continue
+
+    return analysis_dict
+
+
+def analyze_single_timelapse(file_in, timelapse, parameters):
     # detect spots
     p1 = parameters["spot_finding"]
 
@@ -176,48 +223,41 @@ def process_files(task, file_list, config):
 
         parentdir = Path(file_list[0]).parent
 
+        h5flist = []
+
         for i, fn in enumerate(file_list, 1):
             # convert file string to path
             fp = Path(fn)
             h5path = fp.with_suffix(".h5")
 
-            progress = int((i / total_files) * 100)
-            print(f"PROGRESS:{progress}")
-            sys.stdout.flush()
+            if h5path.exists():
+                h5flist.append(h5path)
 
-            try:
+        compiled_ensemble = compile_dataframes(
+            h5flist, dataset_name="mobile ensemble"
+        )
+        compiled_timeavg = compile_dataframes(
+            h5flist, dataset_name="mobile time-averaged"
+        )
 
-                with h5py.File(h5path) as hdf:
-                    g = hdf["analyses/analysis/MSD analysis"]
-                    men = g["mobile ensemble"]
-                    mta = g["mobile time-averaged"]
+        for key, value in compiled_ensemble.items():
+            coldf = pd.concat(value, ignore_index=True)
+            coldf.to_csv(
+                parentdir / f"{key.replace(' ', '_')}_mobile_ensemble.csv",
+                index=False,
+            )
 
-                    emsd = pd.DataFrame.from_records(
-                        men, columns=men.dtype.names
-                    )
-                    imsd = pd.DataFrame.from_records(
-                        mta, columns=mta.dtype.names
-                    )
-                    emsd.insert(0, "filename", fp.name)
-                    imsd.insert(0, "filename", fp.name)
+        for key, value in compiled_timeavg.items():
+            coldf = pd.concat(value, ignore_index=True)
+            coldf.to_csv(
+                parentdir / f"{key.replace(' ', '_')}_time-averaged.csv",
+                index=False,
+            )
 
-                en_dflist.append(emsd)
-                ta_dflist.append(imsd)
-
-            except FileNotFoundError:
-                # skip if there are no HDF5 files found
-                continue
-
-        en_df_col = pd.concat(en_dflist, ignore_index=True)
-        ta_df_col = pd.concat(ta_dflist, ignore_index=True)
-
-        # save the dataframe
-        en_df_col.to_csv(parentdir / "ensemble_MSD.csv", index=False)
-        ta_df_col.to_csv(parentdir / "timeavg_MSD.csv", index=False)
+        sys.stdout.flush()
 
 
 if __name__ == "__main__":
-
     args = parse_args()
     config = load_configuration(args.config)
     process_files(args.task, args.files, config)
