@@ -218,9 +218,6 @@ def process_files(task, file_list, config):
         print("compiling MSDs -- batch mode")
         sys.stdout.flush()
 
-        en_dflist = []
-        ta_dflist = []
-
         parentdir = Path(file_list[0]).parent
 
         h5flist = []
