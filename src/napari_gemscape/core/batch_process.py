@@ -18,7 +18,9 @@ from pathlib import Path
 
 import analysis
 import h5py
+import numpy as np
 import pandas as pd
+import tifffile
 from spotfitlm.utils import find_spots_in_timelapse
 
 from napari_gemscape.core.utils import (
@@ -100,12 +102,21 @@ def compile_dataframes(hdf5_files, dataset_name="mobile ensemble"):
     return analysis_dict
 
 
-def analyze_single_timelapse(file_in, timelapse, parameters):
+def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
     # detect spots
     p1 = parameters["spot_finding"]
 
+    if mask_file is not None:
+        mask = tifffile.imread(mask_file)
+        mask_path = Path(mask_file)
+        mask_name = mask_path.stem.split("_")[-1]
+    else:
+        mask = None
+        mask_name = ""
+
     spots_df = find_spots_in_timelapse(
         timelapse,
+        mask=mask,
         start_frame=p1["start_frame"],
         end_frame=p1["end_frame"],
         sigma=p1["sigma"],
@@ -157,7 +168,7 @@ def analyze_single_timelapse(file_in, timelapse, parameters):
 
     # compile data results
     shared_data = {"analyses": {}}
-    group_name = "analysis"
+    group_name = f"{mask_name} analysis"
     shared_data["analyses"].update({group_name: {}})
     shared_data["analyses"][group_name].update({"points": spots_df})
     shared_data["analyses"][group_name].update(
@@ -165,15 +176,24 @@ def analyze_single_timelapse(file_in, timelapse, parameters):
     )
     # at the moment, no mask is supported for batch-mode
     shared_data["analyses"][group_name].update(
-        {"frac_mobile": link_result["frac_mobile"], "mask_name": ""}
+        {"frac_mobile": link_result["frac_mobile"], "mask_name": mask_name}
     )
     shared_data["analyses"][group_name].update(analysis_data)
 
     # save to HDF5 file
     hdf5_outpath = Path(file_in).with_suffix(".h5")
+
     with h5py.File(hdf5_outpath, "w") as fhd:
         save_parameters_to_hdf5(fhd, parameters)
         save_dict_to_hdf5(fhd, shared_data)
+
+    if mask is not None:
+        # save mask to HDF5 file
+        with h5py.File(hdf5_outpath, "a") as fhd:
+            mask_group = fhd.require_group("masks")
+            mask_group.create_dataset(
+                f"{mask_name}", data=mask.astype(np.uint8), dtype="uint8"
+            )
 
 
 def process_files(task, file_list, config):
@@ -199,6 +219,17 @@ def process_files(task, file_list, config):
         for i, fn in enumerate(file_list, 1):
             print(f"Working on {fn}...")
             sys.stdout.flush()
+
+            # check if the corresponding mask file exists
+            fp = Path(fn)
+            mask_fn = f"{fp.stem}_mask.tif"
+            mask_path = fp.parent / mask_fn
+
+            if mask_path.exists():
+                mask_filename = str(mask_path)
+            else:
+                mask_filename = None
+
             try:
                 progress = int((i / total_files) * 100)
                 print(f"PROGRESS:{progress}")
@@ -207,7 +238,9 @@ def process_files(task, file_list, config):
                 # read image file
                 file_reader = gemscape_get_reader(fn)
                 image = file_reader(fn)
-                analyze_single_timelapse(fn, image, config)
+                analyze_single_timelapse(
+                    fn, image, config, mask_file=mask_filename
+                )
                 sys.stdout.flush()
 
             except Exception as e:

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from natsort import natsorted
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import (
     QFileDialog,
@@ -10,6 +11,7 @@ from qtpy.QtWidgets import (
 )
 
 SUPPORTED_FORMATS = [".tiff", ".nd2", ".tif", ".ims"]
+EXCLUDE_SUFFIXES = ("_mask", "_cyto", "_nucleus")
 
 
 class FilepathItem(QListWidgetItem):
@@ -129,8 +131,10 @@ class InputFileList(QListWidget):
         self.clear()
         self.folder_path = folder_path
 
-        for file_path in self.folder_path.iterdir():
+        for file_path in natsorted(self.folder_path.iterdir()):
             if file_path.name.startswith("."):
+                continue
+            if file_path.stem.endswith(EXCLUDE_SUFFIXES):
                 continue
             if file_path.suffix.lower() in SUPPORTED_FORMATS:
                 _item = self.add_item(file_path)

@@ -610,6 +610,13 @@ class EasyGEMsWidget(QWidget, SharedState):
                 for item in self.fileListWidget.items()
                 if item.status not in ["skip", "complete"]
             ]
+        if task == "compile MSDs":
+            # only compile MSDs from completed files
+            flist = [
+                str(item.file_path.resolve())
+                for item in self.fileListWidget.items()
+                if item.status == "complete"
+            ]
         else:
             # otherwise just give the entire list (the checking should
             # be done by the batch processing function)
