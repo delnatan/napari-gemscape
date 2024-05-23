@@ -102,6 +102,70 @@ def compile_dataframes(hdf5_files, dataset_name="mobile ensemble"):
     return analysis_dict
 
 
+def compile_summaries(hdf5_files):
+    analysis_dict = {}
+
+    for i, file in enumerate(hdf5_files, start=1):
+        print(f"PROGRESS:{i}")
+        sys.stdout.flush()
+
+        try:
+            with h5py.File(file, "r") as f:
+                analyses_group = f["analyses"]
+
+                if analyses_group is None:
+                    print(f"No 'analyses' has been done for {file}.")
+                    sys.stdout.flush()
+                    continue
+
+                for analysis_type in analyses_group:
+                    frac_mobile = f[f"analyses/{analysis_type}"].attrs.get(
+                        "frac_mobile", None
+                    )
+
+                    try:
+                        datagroupstr = f"analyses/{analysis_type}/MSD analysis"
+                        dataset = f[datagroupstr]
+                    except Exception as e:
+                        print(f"Error : {e}")
+                        sys.stdout.flush()
+                        print(f"-----> Can't find {file}[{datagroupstr}]")
+                        sys.stdout.flush()
+                        continue
+
+                    if dataset is None:
+                        print(f"Can't find {file}[{datagroupstr}]")
+                        sys.stdout.flush()
+                        continue
+
+                    # form single-row dfs
+                    df = {
+                        "source_file": file.stem,
+                        "frac_mobile": frac_mobile,
+                        "mobile_D": dataset.attrs.get("mobile D", None),
+                        "mobile_D_std": dataset.attrs.get(
+                            "mobile D std", None
+                        ),
+                        "stationary_D": dataset.attrs.get(
+                            "stationary D", None
+                        ),
+                        "stationary_D_std": dataset.attrs.get(
+                            "stationary D std", None
+                        ),
+                    }
+
+                    if analysis_type not in analysis_dict:
+                        analysis_dict[analysis_type] = []
+
+                    analysis_dict[analysis_type].append(df)
+
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+            continue
+
+    return analysis_dict
+
+
 def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
     # detect spots
     p1 = parameters["spot_finding"]
@@ -284,7 +348,29 @@ def process_files(task, file_list, config):
                 index=False,
             )
 
+    if task == "compile summaries":
+        print("compiling summaries -- batch mode")
         sys.stdout.flush()
+
+        parentdir = Path(file_list[0]).parent
+
+        h5flist = []
+
+        for i, fn in enumerate(file_list, 1):
+            # convert file string to path
+            fp = Path(fn)
+            h5path = fp.with_suffix(".h5")
+
+            if h5path.exists():
+                h5flist.append(h5path)
+
+        lsummaries = compile_summaries(h5flist)
+
+        for key, value in lsummaries.items():
+            coldf = pd.DataFrame(value)
+            coldf.to_csv(
+                parentdir / f"{key.replace(' ', '_')}_summary.csv", index=False
+            )
 
 
 if __name__ == "__main__":

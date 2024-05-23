@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import imageio
+import matplotlib.patheffects as path_effects
 import numpy as np
+from matplotlib.patches import Circle
 from napari import Viewer
 
 
@@ -82,3 +84,56 @@ def convert_numpy_types(obj):
         return obj.tolist()
     else:
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def hairball_plot(ax, tracks, nth=2, shell_diams=[0.1, 0.3], dxy=0.065):
+    df = tracks[["particle", "frame", "x", "y"]].copy()
+    df[["dx", "dy"]] = df.groupby("particle")[["x", "y"]].diff()
+    df["xo"] = df.groupby("particle")["dx"].cumsum()
+    df["yo"] = df.groupby("particle")["dy"].cumsum()
+
+    particle_ids = df["particle"].unique()[::nth]
+    thinned = df[df["particle"].isin(particle_ids)]
+
+    for pid in thinned["particle"].unique():
+        _df = thinned[thinned["particle"] == pid]
+        ax.plot(
+            _df["xo"].values * dxy,
+            _df["yo"].values * dxy,
+            "-",
+            lw=0.9,
+            alpha=0.25,
+            color="#444444",
+            zorder=1,
+        )
+
+    for diam in shell_diams:
+        c = Circle(
+            (0, 0),
+            diam,
+            linestyle="dashed",
+            color="black",
+            fill=False,
+            linewidth=1.2,
+        )
+        _t = ax.text(
+            diam,
+            diam,
+            f"{diam:.2f} $\\mu m$",
+            color="white",
+            ha="center",
+            fontsize=8,
+        )
+        _t.set_path_effects(
+            [
+                path_effects.Stroke(linewidth=1.25, foreground="black"),
+                path_effects.Normal(),
+            ]
+        )
+
+        ax.add_artist(c)
+
+    ax.set_ylim(-shell_diams[-1] * 1.75, shell_diams[-1] * 1.75)
+    ax.set_xlim(-shell_diams[-1] * 1.75, shell_diams[-1] * 1.75)
+
+    ax.set_aspect("equal")

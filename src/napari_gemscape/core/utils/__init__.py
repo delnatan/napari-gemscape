@@ -24,4 +24,5 @@ __all__ = [
     "print_dict_keys",
     "get_reader",
     "print_dict",
+    "hairball_plot",
 ]
