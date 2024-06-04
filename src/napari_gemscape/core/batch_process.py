@@ -56,9 +56,10 @@ def load_configuration(file_path):
 
 def compile_dataframes(hdf5_files, dataset_name="mobile ensemble"):
     analysis_dict = {}
-
+    n_files = len(hdf5_files)
     for i, file in enumerate(hdf5_files, start=1):
-        print(f"PROGRESS:{i}")
+        progress = int((i / n_files) * 100)
+        print(f"PROGRESS:{progress:d}")
         sys.stdout.flush()
 
         try:
@@ -104,9 +105,10 @@ def compile_dataframes(hdf5_files, dataset_name="mobile ensemble"):
 
 def compile_summaries(hdf5_files):
     analysis_dict = {}
-
+    n_files = len(hdf5_files)
     for i, file in enumerate(hdf5_files, start=1):
-        print(f"PROGRESS:{i}")
+        progress = int((i / n_files) * 100)
+        print(f"PROGRESS:{progress:d}")
         sys.stdout.flush()
 
         try:
