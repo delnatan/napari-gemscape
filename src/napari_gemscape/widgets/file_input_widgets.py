@@ -81,6 +81,10 @@ class InputFileList(QListWidget):
             # changes its status to 'skip'
             self.item(current_index).set_status("skip")
 
+        if e.key() == Qt.Key_U:
+            current_index = self.currentRow()
+            self.item(current_index).set_status("untouched")
+
         if e.key() == Qt.Key_Up:
             current_index = self.currentRow()
             moved_index = max(current_index, 0)
