@@ -611,14 +611,14 @@ class EasyGEMsWidget(QWidget, SharedState):
                 for item in self.fileListWidget.items()
                 if item.get_status() not in ["skip", "complete"]
             ]
-        if task in ["compile MSDs", "compile summaries"]:
+        elif task in ["compile MSDs", "compile summaries"]:
             # only compile MSDs from completed files
             flist = [
                 str(item.file_path.resolve())
                 for item in self.fileListWidget.items()
                 if item.status == "complete"
             ]
-        if task == "test":
+        elif task == "test":
             flist = [
                 str(item.file_path.resolve())
                 for item in self.fileListWidget.items()
@@ -631,6 +631,11 @@ class EasyGEMsWidget(QWidget, SharedState):
                 str(item.file_path.resolve())
                 for item in self.fileListWidget.items()
             ]
+
+        # debug
+        print(f"task: {task}")
+        for f in flist:
+            print(f)
 
         # get analysis parameters
         pars = self.shared_parameters
