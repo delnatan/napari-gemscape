@@ -604,7 +604,7 @@ class EasyGEMsWidget(QWidget, SharedState):
     def start_batch_process(self):
         task = self.batchTaskChoices.currentText()
 
-        if task == "analyze GEMs":
+        if task == "analyse GEMs":
             # skip ones that are already done
             flist = [
                 str(item.file_path.resolve())

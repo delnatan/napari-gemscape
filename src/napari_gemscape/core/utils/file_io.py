@@ -219,6 +219,8 @@ def save_dict_to_hdf5(hdf_file: h5py.File, d: dict, parent_group="/"):
             hdf_file[parent_group + key] = value.to_records(index=False)
         elif isinstance(value, np.ndarray):
             hdf_file[parent_group + key] = value
+        elif value is None:
+            hdf_file[parent_group + key] = np.nan
         else:
             raise ValueError(f"Unsupported data type: {type(value)}")
 
