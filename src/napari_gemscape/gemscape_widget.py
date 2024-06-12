@@ -13,6 +13,7 @@ import h5py
 import napari
 import numpy as np
 import pandas as pd
+import tifffile
 from matplotlib import style
 from qtpy.QtCore import QProcess
 from qtpy.QtWidgets import (
@@ -141,6 +142,8 @@ class EasyGEMsWidget(QWidget, SharedState):
         # add 'Create mask' button
         createMaskButton = QPushButton("Create mask")
         spotFindingLayout.addWidget(createMaskButton)
+        saveMaskButton = QPushButton("Save mask")
+        spotFindingLayout.addWidget(saveMaskButton)
 
         spot_finding_parameters = [
             Parameter("image", None, annotation=napari.layers.Image),
@@ -179,6 +182,8 @@ class EasyGEMsWidget(QWidget, SharedState):
 
         # connect button click to create mask
         createMaskButton.clicked.connect(self.add_mask)
+        # connect button click to save mask
+        saveMaskButton.clicked.connect(self.save_mask)
 
         self.tab_widget.addTab(spotFindingWidget, "Find spots")
 
@@ -587,6 +592,14 @@ class EasyGEMsWidget(QWidget, SharedState):
             with h5py.File(state_file, "r") as fhd:
                 state_dict = load_dict_from_hdf5(fhd)
             load_state(state_dict, self.viewer, self)
+        elif filestatus == "in progress":
+            mask_file = filepath.parent / f"{filepath.stem}_mask.tif"
+            try:
+                mask = tifffile.imread(mask_file)
+                self.viewer.add_labels(mask, name="mask")
+            except Exception as e:
+                print(f"Loading mask error: {e}")
+                raise
         else:
             # erase current state
             self.shared_data = {"analyses": {}}
@@ -600,6 +613,24 @@ class EasyGEMsWidget(QWidget, SharedState):
             image_shape = self.viewer.layers[image_name].data.shape
             new_mask = np.zeros(image_shape[-2:], dtype=np.uint8)
             self.viewer.add_labels(new_mask, name="mask")
+
+    def save_mask(self):
+        _mask_layers = [
+            layer.name
+            for layer in self.viewer.layers
+            if isinstance(layer, napari.layers.Labels)
+        ]
+
+        if len(_mask_layers) > 0:
+            # get root folder
+            outpath = self.fileListWidget.folder_path
+            current_item = self.fileListWidget.currentItem()
+
+            for label_name in _mask_layers:
+                mask_data = self.viewer.layers[label_name].data
+                current_path = current_item.file_path
+                outfn = outpath / f"{current_path.stem}_{label_name}.tif"
+                tifffile.imwrite(outfn, mask_data, compression="lzw")
 
     def start_batch_process(self):
         task = self.batchTaskChoices.currentText()

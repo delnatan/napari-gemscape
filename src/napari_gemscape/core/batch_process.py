@@ -175,7 +175,9 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
     if mask_file is not None:
         mask = tifffile.imread(mask_file)
         mask_path = Path(mask_file)
-        mask_name = mask_path.stem.split("_")[-1]
+        # add a space to the end of mask name
+        mask_name = f'{mask_path.stem.split("_")[-1]} '
+
     else:
         mask = None
         mask_name = ""
@@ -234,7 +236,7 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
 
     # compile data results
     shared_data = {"analyses": {}}
-    group_name = f"{mask_name} analysis"
+    group_name = f"{mask_name}analysis"
     shared_data["analyses"].update({group_name: {}})
     shared_data["analyses"][group_name].update({"points": spots_df})
     shared_data["analyses"][group_name].update(

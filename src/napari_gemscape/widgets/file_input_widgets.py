@@ -142,9 +142,13 @@ class InputFileList(QListWidget):
                 continue
             if file_path.suffix.lower() in SUPPORTED_FORMATS:
                 _item = self.add_item(file_path)
-                if file_path.with_suffix(".h5").exists():
+                _h5file = file_path.with_suffix(".h5")
+                _maskfile = file_path.parent / f"{file_path.stem}_mask.tif"
+                if _h5file.exists():
                     # do some checks here
                     _item.set_status("complete")
+                elif _maskfile.exists():
+                    _item.set_status("in progress")
 
             # '0' can be added to the list
             self.itemAdded.emit(self.count())
