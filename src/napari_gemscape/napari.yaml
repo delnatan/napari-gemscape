@@ -38,4 +38,3 @@ contributions:
     display_name: Plot widget
   - command: napari-gemscape.SimpleMovieRecorderWidget
     display_name: Save screen to movie (.mp4)
-    autogenerate: true # magicgui will automagically return a widget with this

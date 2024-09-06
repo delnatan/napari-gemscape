@@ -3,10 +3,12 @@ from pathlib import Path
 import imageio
 import matplotlib.patheffects as path_effects
 import numpy as np
+from magicgui import magic_factory
 from matplotlib.patches import Circle
 from napari import Viewer
 
 
+@magic_factory(mp4_output_path={"widget_type": "FileEdit", "mode": "w"})
 def record_timelapse_movie(
     viewer: Viewer,
     t_start: int,

@@ -329,7 +329,7 @@ class EasyGEMsWidget(QWidget, SharedState):
                 symbol="s",
                 size=self.shared_parameters["spot_finding"]["boxsize"].value,
                 face_color="transparent",
-                edge_color="yellow",
+                border_color="yellow",
                 name=points_layer_name,
                 features=result,
             )

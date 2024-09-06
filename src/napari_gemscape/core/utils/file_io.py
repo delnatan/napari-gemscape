@@ -3,7 +3,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Optional, Union
 
-import dask.array as da
 import h5py
 import mrc
 import napari
@@ -34,7 +33,7 @@ def get_reader(path: PathLike):
         image_reader = gemscape_get_reader(path)
         image_data = image_reader(path)
 
-        clo, chi = np.percentile(image_data.ravel(), (0.1, 99.8))
+        clo, chi = np.percentile(image_data.ravel(), (0.1, 99.9))
 
         return [
             (
@@ -56,7 +55,7 @@ def gemscape_get_reader(path: PathLike) -> Optional[ReaderFunction]:
 
     if path.suffix in FILE_FORMATS:
         if path.suffix == ".nd2":
-            return lambda fn: nd2.imread(fn, dask=True)
+            return lambda fn: nd2.imread(fn)
         if path.suffix == ".dv":
             return mrc.imread
         if path.suffix == ".tif" or path.suffix == ".tiff":
@@ -340,7 +339,7 @@ def load_state(
                     features=value["points"],
                     name=f"{mask_name + ' ' * spacer}GEMs",
                     symbol="s",
-                    edge_color="yellow",
+                    border_color="yellow",
                     face_color="transparent",
                     size=state_dict["parameters"]["spot_finding"]["boxsize"],
                 )
