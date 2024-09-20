@@ -54,6 +54,56 @@ def load_configuration(file_path):
     return {}
 
 
+def compile_tracks(hdf5_files):
+    analysis_dict = {}
+    n_files = len(hdf5_files)
+
+    for i, file in enumerate(hdf5_files, start=1):
+        progress = int((i / n_files) * 100)
+        print(f"PROGRESS:{progress:d}")
+        sys.stdout.flush()
+
+        try:
+            with h5py.File(file, "r") as f:
+                analyses_group = f["analyses"]
+
+                if analyses_group is None:
+                    print(f"No 'analyses' has been done for {file}.")
+                    sys.stdout.flush()
+                    continue
+
+                for analysis_type in analyses_group:
+                    try:
+                        datagroupstr = f"analyses/{analysis_type}/tracks"
+                        dataset = f[datagroupstr]
+                    except Exception as e:
+                        print(f"Error : {e}")
+                        sys.stdout.flush()
+                        print(f"-----> Can't find {file}[{datagroupstr}]")
+                        sys.stdout.flush()
+                        continue
+
+                    if dataset is None:
+                        print(f"Can't find {file}.../{datagroupstr}")
+                        sys.stdout.flush()
+                        continue
+
+                    df = pd.DataFrame.from_records(
+                        dataset, columns=dataset.dtype.names
+                    )
+                    df.insert(0, "source_file", file.stem)
+
+                    if analysis_type not in analysis_dict:
+                        analysis_dict[analysis_type] = []
+                    analysis_dict[analysis_type].append(df)
+
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+            continue
+
+    return analysis_dict
+
+
 def compile_dataframes(hdf5_files, dataset_name="mobile ensemble"):
     analysis_dict = {}
     n_files = len(hdf5_files)
@@ -315,6 +365,31 @@ def process_files(task, file_list, config):
             except Exception as e:
                 print(f"for loop error: {str(e)}", file=sys.stderr)
                 sys.stdout.flush()
+
+    if task == "compile tracks":
+        print("compiling tracks -- batch mode")
+
+        sys.stdout.flush()
+
+        parentdir = Path(file_list[0]).parent
+
+        h5flist = []
+
+        for i, fn in enumerate(file_list, 1):
+            fp = Path(fn)
+            h5path = fp.with_suffix(".h5")
+
+            if h5path.exists():
+                h5flist.append(h5path)
+
+        compiled_tracks = compile_tracks(h5flist)
+
+        for key, value in compiled_tracks.items():
+            coldf = pd.concat(value, ignore_index=True)
+            coldf.to_csv(
+                parentdir / f"{key.replace(' ', '_')}_tracks.csv",
+                index=False,
+            )
 
     if task == "compile MSDs":
         print("compiling MSDs -- batch mode")

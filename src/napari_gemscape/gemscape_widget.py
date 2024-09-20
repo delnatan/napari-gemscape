@@ -113,6 +113,7 @@ class EasyGEMsWidget(QWidget, SharedState):
         self.batchTaskChoices.addItem("analyse GEMs")
         self.batchTaskChoices.addItem("compile MSDs")
         self.batchTaskChoices.addItem("compile summaries")
+        self.batchTaskChoices.addItem("compile tracks")
 
         inputLayout.addWidget(self.batchTaskChoices)
 
