@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from scipy.integrate import quad
+from scipy.optimize import minimize
+from scipy.special import jnp_zeros
 
 
 def compute_track_quantities(sdf: pd.DataFrame):
@@ -208,3 +210,137 @@ def fit_msds(x, y, s, ndim=2):
     loc_error_std = np.sqrt(coef_variances[1])
 
     return (D, D_std), (loc_error, loc_error_std), coefs
+
+
+def constrained_diffusion(Rc, D, t):
+    """numerical expression for diffusion in a circle
+
+    Arguments
+    =========
+    Rc (float)   : radius of confinement
+    D (float)    : diffusion coefficient
+    t (np.array) : array of time lags
+    """
+
+    tau = Rc**2 / D
+    m = 5
+    MSD = np.zeros_like(t)
+
+    # bessel function derivative first-order, m zeros
+    alpha = jnp_zeros(1, m)
+    a2 = alpha * alpha
+
+    exp_coeff = -a2[:, None] / tau  # shape (5, 1)
+    denom = a2 * (a2 - 1)  # shape (5,)
+
+    sum_terms = np.sum(
+        np.exp(exp_coeff * t) * (1 / denom[:, None]), axis=0
+    )  # shape (size(t),)
+
+    MSD = Rc**2 * (1 - 8 * sum_terms)
+
+    return MSD
+
+
+def combine_mean_stdev(group):
+    """
+    Compute combined mean and standard deviation for grouped data.
+
+    This function calculates the combined mean, standard deviation, and total count
+    for a pandas GroupBy object containing pre-computed means, standard deviations,
+    and counts for subgroups.
+
+    Parameters:
+    ----------
+    group : pandas.core.groupby.GroupBy
+        A GroupBy object with columns:
+        - 'count': number of samples in each subgroup
+        - 'mean': mean value of each subgroup
+        - 'std': standard deviation of each subgroup
+
+    Returns:
+    -------
+    pandas.Series
+        A Series containing:
+        - 'mean': combined mean of all subgroups
+        - 'std': combined standard deviation of all subgroups
+        - 'count': total count of all samples
+
+    Notes:
+    -----
+    This function uses the following formulas for combining means and variances:
+    - Combined mean: Σ(n_i * x_i) / N
+    - Combined variance: (Σ(n_i * s_i^2) + Σ(n_i * x_i^2) - N * x_c^2) / (N - 1)
+    where n_i is the count, x_i is the mean, and s_i is the standard deviation of each subgroup,
+    N is the total count, and x_c is the combined mean.
+
+    The function assumes that the input standard deviations are sample standard deviations
+    (i.e., calculated with N-1 in the denominator).
+
+    Example:
+    -------
+    >>> df = pd.DataFrame({
+    ...     'group': ['A', 'A', 'B', 'B'],
+    ...     'count': [10, 15, 20, 25],
+    ...     'mean': [5, 7, 6, 8],
+    ...     'std': [2, 3, 2.5, 3.5]
+    ... })
+    >>> result = df.groupby('group').apply(combine_mean_stdev)
+    """
+    total_count = group["count"].sum()
+
+    # we need to 'undo' the averaging
+    x = group["count"] * group["mean"]
+    xx = group["std"] ** 2 * (group["count"] - 1) + x**2 / group["count"]
+
+    combined_mean = x.sum() / total_count
+    combined_variance = (xx.sum() - x.sum() ** 2 / total_count) / (
+        total_count - 1
+    )
+    combined_stdev = np.sqrt(combined_variance)
+    return pd.Series(
+        {"mean": combined_mean, "std": combined_stdev, "count": total_count}
+    )
+
+
+def negloglikfn(pars, x, y_obs, y_std):
+    Rc, D = pars
+    y = constrained_diffusion(Rc, D, x)
+    return np.sum(((y - y_obs) / (y_std)) ** 2)
+
+
+def fit_constrained_diffusion(x, y, sd, Rc0=0.2, D0=0.1):
+    p0 = (Rc0, D0)
+    optres = minimize(
+        negloglikfn,
+        p0,
+        args=(x, y, sd),
+        bounds=((1e-4, 1.25), (1e-4, 1.25)),
+    )
+    return optres.x[0], optres.x[1]
+
+
+def batch_fit_constrained_model(df, group_name="source_file", max_lag=0.4):
+    dpars = {group_name: [], "Rc": [], "D": [], "success": []}
+
+    # fit for every worm (1 worm in every timelapse)
+    for image_id, edf in df.groupby(group_name):
+        x_obs = edf["lag"].values
+        mask = x_obs <= max_lag
+        y_obs = edf["mean"].values[mask]
+        y_std = edf["std"].values[mask]
+        p0 = np.array((np.sqrt(y_obs.max()), 0.1))
+
+        optres = minimize(
+            negloglikfn,
+            p0,
+            args=(x_obs[mask], y_obs, y_std),
+            bounds=((1e-4, 1.2), (1e-4, 1.2)),
+        )
+
+        dpars[group_name].append(image_id)
+        dpars["Rc"].append(optres.x[0])
+        dpars["D"].append(optres.x[1])
+        dpars["success"].append(optres.success)
+
+    return pd.DataFrame(dpars)

@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# documentation (org source file)
+docs/napari_gemscape_readme.org
+
 # C extensions
 *.so
 

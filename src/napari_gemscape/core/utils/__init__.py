@@ -1,8 +1,12 @@
 from .diffusion_helpers import (
+    batch_fit_constrained_model,
+    combine_mean_stdev,
     compute_msd,
     compute_R,
     compute_track_quantities,
     compute_track_stats,
+    constrained_diffusion,
+    fit_constrained_diffusion,
     fit_msds,
 )
 from .file_io import *
