@@ -228,6 +228,7 @@ class EasyGEMsWidget(QWidget, SharedState):
             Parameter("dxy", 0.065, min=0.01, step=0.001),
             Parameter("dt", 0.010, min=0.001, step=0.005),
             Parameter("n_pts_to_fit", 3, min=2),
+            Parameter("drift_corr_smooth", 0, min=-1),
         ]
 
         self.add_shared_parameters(analysis_parameters, "analysis")

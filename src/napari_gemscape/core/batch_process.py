@@ -216,6 +216,7 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
         dxy=p3["dxy"],
         dt=p3["dt"],
         n_pts_to_fit=p3["n_pts_to_fit"],
+        drift_corr_smooth=p3["drift_corr_smooth"],
     )
 
     m_D, m_D_std = msdfitres["m_D"]

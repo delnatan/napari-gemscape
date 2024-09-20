@@ -10,6 +10,7 @@ used in a GEM analysis pipeline.
 import pandas as pd
 import trackpy as tp
 from napari.layers import Points, Tracks
+
 from napari_gemscape.core.utils import (
     compute_msd,
     compute_track_quantities,
@@ -78,7 +79,9 @@ def link_trajectory(
     return {"frac_mobile": frac_mobile, "tracks_df": tdf}
 
 
-def fit_msd(tracks: None, dxy=0.065, dt=0.01, n_pts_to_fit=3):
+def fit_msd(
+    tracks: None, dxy=0.065, dt=0.01, n_pts_to_fit=3, drift_corr_smooth=-1
+):
     """fit MSDs given napari `Tracks` layer"""
     if tracks is None:
         return None
@@ -89,6 +92,11 @@ def fit_msd(tracks: None, dxy=0.065, dt=0.01, n_pts_to_fit=3):
         df = tracks
     else:
         return None
+
+    if drift_corr_smooth > -1:
+        drift = tp.compute_drift(df, smoothing=drift_corr_smooth)
+        print(drift)
+        df = tp.subtract_drift(df, drift).reset_index(drop=True)
 
     motion_groups = df.groupby("motion")
 
