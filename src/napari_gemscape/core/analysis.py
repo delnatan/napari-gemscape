@@ -50,6 +50,8 @@ def link_trajectory(
     tdf = df.groupby("particle").filter(
         lambda x: len(x) >= minimum_track_length
     )
+
+    # sort by particle and frame (important for computing track stats)
     tdf = tdf.sort_values(
         by=["particle", "frame"], ascending=True
     ).reset_index(drop=True)
@@ -59,6 +61,11 @@ def link_trajectory(
         tdf.groupby("particle", group_keys=True)
         .apply(compute_track_quantities)
         .reset_index()
+    )
+
+    track_stats.drop(
+        columns=[c for c in track_stats.columns if c.startswith("level")],
+        inplace=True,
     )
 
     tdf = tdf.merge(track_stats)

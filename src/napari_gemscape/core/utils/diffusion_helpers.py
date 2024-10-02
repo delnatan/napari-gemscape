@@ -11,13 +11,17 @@ def compute_track_quantities(sdf: pd.DataFrame):
 
     this function is meant to be used in `df.apply()`
     """
-    step_length = (sdf["x"].diff() ** 2 + sdf["y"].diff() ** 2) ** 0.5
+    dx = sdf["x"].diff()  # displacements in x
+    dy = sdf["y"].diff()  # displacements in y
+    step_length = (dx**2 + dy**2) ** 0.5
     step_sigma = (sdf["xy_std"] ** 2 + sdf["xy_std"].shift(1) ** 2) ** 0.5
     rcdfval = 1 - np.exp((-(step_length**2)) / (2 * step_sigma**2))
 
     return pd.DataFrame(
         {
             "frame": sdf["frame"],
+            "dx": dx,
+            "dy": dy,
             "step_length": step_length,
             "step_sigma": step_sigma,
             "prob_mobile_step": rcdfval,
