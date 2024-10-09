@@ -386,6 +386,18 @@ def process_files(task, file_list, config):
 
         for key, value in compiled_tracks.items():
             coldf = pd.concat(value, ignore_index=True)
+
+            # make each particle ID unique
+            particle_max = coldf.groupby("source_file")["particle"].max()
+            offset = (particle_max + 1).cumsum().shift(fill_value=0)
+            # do merge to ensure offset is applied to corresponding particle
+            coldf = coldf.merge(
+                offset.rename("offset"), on="source_file", how="left"
+            )
+            coldf["particle"] += coldf["offset"]
+            # remove 'offset' columns
+            coldf = coldf.drop(columns=["offset"])
+
             coldf.to_csv(
                 parentdir / f"{key.replace(' ', '_')}_tracks.csv",
                 index=False,
