@@ -431,6 +431,8 @@ class EasyGEMsWidget(QWidget, SharedState):
         s_D, s_D_std = result["s_D"]
         mcoefs = result["mcoefs"]
         scoefs = result["scoefs"]
+        xdrift = result["xdrift"]
+        ydrift = result["ydrift"]
 
         analysis_data = {
             "MSD analysis": {
@@ -442,6 +444,8 @@ class EasyGEMsWidget(QWidget, SharedState):
                 "mobile D std": m_D_std,
                 "stationary D": s_D,
                 "stationary D std": s_D_std,
+                "xdrift": xdrift,
+                "ydrift": ydrift,
             }
         }
 

@@ -102,8 +102,12 @@ def fit_msd(
 
     if drift_corr_smooth > -1:
         drift = tp.compute_drift(df, smoothing=drift_corr_smooth)
-        print(drift)
+        xdrift = drift["x"].values
+        ydrift = drift["y"].values
         df = tp.subtract_drift(df, drift).reset_index(drop=True)
+    else:
+        xdrift = None
+        ydrift = None
 
     motion_groups = df.groupby("motion")
 
@@ -160,4 +164,6 @@ def fit_msd(
         "s_D": [s_D_eff, s_D_eff_sd],
         "mcoefs": mcoefs,
         "scoefs": scoefs,
+        "xdrift": xdrift,
+        "ydrift": ydrift,
     }
