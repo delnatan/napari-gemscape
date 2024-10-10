@@ -16,7 +16,11 @@ import sys
 import time
 from pathlib import Path
 
-import analysis
+try:
+    import analysis
+except ModuleNotFoundError:
+    from . import analysis
+
 import h5py
 import numpy as np
 import pandas as pd
