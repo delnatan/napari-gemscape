@@ -7,6 +7,7 @@ from .diffusion_helpers import (
     compute_track_stats,
     constrained_diffusion,
     fit_constrained_diffusion,
+    fit_imsd,
     fit_msds,
 )
 from .file_io import *

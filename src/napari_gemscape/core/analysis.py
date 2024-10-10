@@ -23,9 +23,10 @@ tp.quiet(suppress=True)
 
 def link_trajectory(
     points=None,
-    minimum_track_length=2,
-    maximum_displacement=4,
-    prob_mobile_cutoff=0.5,
+    minimum_track_length=3,
+    maximum_displacement=4.2,
+    alpha_cutoff=0.05,
+    drift_corr_smooth=5,
 ):
     """link trajectory given napari 'Points' layer
 
@@ -46,6 +47,12 @@ def link_trajectory(
     # link trajectories
     df = tp.link(df, maximum_displacement)
 
+    if drift_corr_smooth > -1:
+        drift = tp.compute_drift(df, smoothing=drift_corr_smooth)
+        df = tp.subtract_drift(df, drift).reset_index(drop=True)
+    else:
+        drift = None
+
     # filter out 'short' particle tracks
     tdf = df.groupby("particle").filter(
         lambda x: len(x) >= minimum_track_length
@@ -56,7 +63,7 @@ def link_trajectory(
         by=["particle", "frame"], ascending=True
     ).reset_index(drop=True)
 
-    # compute track stats: length, sigma, step-wise Rayleigh 1-CDF
+    # compute track stats (motion classification included)
     track_stats = (
         tdf.groupby("particle", group_keys=True)
         .apply(compute_track_quantities)
@@ -73,7 +80,7 @@ def link_trajectory(
     # compute per-trajectory stats (Rg in pixel unit and motion classification)
     particle_stats = (
         tdf.groupby("particle", group_keys=True)
-        .apply(compute_track_stats)
+        .apply(compute_track_stats, p_mobile_alpha=alpha_cutoff)
         .reset_index()
     )
 
@@ -83,11 +90,14 @@ def link_trajectory(
     # figure out which ones are moving
     frac_mobile = particle_stats["motion"].eq("mobile").mean()
 
-    return {"frac_mobile": frac_mobile, "tracks_df": tdf}
+    return {"frac_mobile": frac_mobile, "tracks_df": tdf, "drift": drift}
 
 
 def fit_msd(
-    tracks: None, dxy=0.065, dt=0.01, n_pts_to_fit=3, drift_corr_smooth=-1
+    tracks: None,
+    dxy=0.065,
+    dt=0.01,
+    n_pts_to_fit=3,
 ):
     """fit MSDs given napari `Tracks` layer"""
     if tracks is None:
@@ -99,15 +109,6 @@ def fit_msd(
         df = tracks
     else:
         return None
-
-    if drift_corr_smooth > -1:
-        drift = tp.compute_drift(df, smoothing=drift_corr_smooth)
-        xdrift = drift["x"].values
-        ydrift = drift["y"].values
-        df = tp.subtract_drift(df, drift).reset_index(drop=True)
-    else:
-        xdrift = None
-        ydrift = None
 
     motion_groups = df.groupby("motion")
 
@@ -164,6 +165,4 @@ def fit_msd(
         "s_D": [s_D_eff, s_D_eff_sd],
         "mcoefs": mcoefs,
         "scoefs": scoefs,
-        "xdrift": xdrift,
-        "ydrift": ydrift,
     }

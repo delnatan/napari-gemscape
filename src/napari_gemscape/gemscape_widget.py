@@ -202,7 +202,8 @@ class EasyGEMsWidget(QWidget, SharedState):
             Parameter("points", None, annotation=napari.layers.Points),
             Parameter("minimum_track_length", 3, min=2),
             Parameter("maximum_displacement", 4.2, min=0.1, step=1.0),
-            Parameter("prob_mobile_cutoff", 0.5, min=0.0, max=1.0, step=0.1),
+            Parameter("alpha_cutoff", 0.05, min=0.0, max=1.0, step=0.01),
+            Parameter("drift_corr_smooth", -1, min=-1, step=1),
         ]
 
         # keep references to linking parameters
@@ -229,7 +230,6 @@ class EasyGEMsWidget(QWidget, SharedState):
             Parameter("dxy", 0.065, min=0.01, step=0.001),
             Parameter("dt", 0.010, min=0.001, step=0.005),
             Parameter("n_pts_to_fit", 3, min=2),
-            Parameter("drift_corr_smooth", 0, min=-1),
         ]
 
         self.add_shared_parameters(analysis_parameters, "analysis")
@@ -365,6 +365,7 @@ class EasyGEMsWidget(QWidget, SharedState):
         group_name = f"{mask_name + ' ' * spacer}analysis"
 
         tracks = result["tracks_df"]
+        drift = result["drift"]
 
         # update "results" in shared data
         # form a dictionary to represent an 'analysis' group
@@ -379,7 +380,9 @@ class EasyGEMsWidget(QWidget, SharedState):
             {"frac_mobile": result["frac_mobile"]}
         )
 
-        self.shared_data["analyses"][group_name].update({"tracks": tracks})
+        self.shared_data["analyses"][group_name].update(
+            {"tracks": tracks, "drift": drift}
+        )
 
         tracks_df = tracks[["particle", "frame", "y", "x"]]
 
@@ -431,8 +434,6 @@ class EasyGEMsWidget(QWidget, SharedState):
         s_D, s_D_std = result["s_D"]
         mcoefs = result["mcoefs"]
         scoefs = result["scoefs"]
-        xdrift = result["xdrift"]
-        ydrift = result["ydrift"]
 
         analysis_data = {
             "MSD analysis": {
@@ -444,8 +445,6 @@ class EasyGEMsWidget(QWidget, SharedState):
                 "mobile D std": m_D_std,
                 "stationary D": s_D,
                 "stationary D std": s_D_std,
-                "xdrift": xdrift,
-                "ydrift": ydrift,
             }
         }
 

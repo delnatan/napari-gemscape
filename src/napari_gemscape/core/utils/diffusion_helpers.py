@@ -3,11 +3,14 @@ import pandas as pd
 from scipy.integrate import quad
 from scipy.optimize import minimize
 from scipy.special import jnp_zeros
+from scipy.stats import chi2
 
 
 def compute_track_quantities(sdf: pd.DataFrame):
     """computes step quantities
-    length, sigma, and CDF from Rayleigh distribution
+
+    step_length (magnitude), step_sigma (combined uncertainties),
+    and p-value of observing step_length given uncertainties
 
     this function is meant to be used in `df.apply()`
     """
@@ -15,7 +18,7 @@ def compute_track_quantities(sdf: pd.DataFrame):
     dy = sdf["y"].diff()  # displacements in y
     step_length = (dx**2 + dy**2) ** 0.5
     step_sigma = (sdf["xy_std"] ** 2 + sdf["xy_std"].shift(1) ** 2) ** 0.5
-    rcdfval = 1 - np.exp((-(step_length**2)) / (2 * step_sigma**2))
+    p_value = np.exp(-(step_length**2) / (2 * step_sigma**2))
 
     return pd.DataFrame(
         {
@@ -24,12 +27,12 @@ def compute_track_quantities(sdf: pd.DataFrame):
             "dy": dy,
             "step_length": step_length,
             "step_sigma": step_sigma,
-            "prob_mobile_step": rcdfval,
+            "p_value": p_value,
         }
     )
 
 
-def compute_track_stats(sdf: pd.DataFrame, prob_mobile_cutoff: float = 0.5):
+def compute_track_stats(sdf: pd.DataFrame, p_mobile_alpha: float = 0.05):
     """computes radius of gyration, track length, and other things
     that may be used to filter and/or classify a trajectory
 
@@ -45,15 +48,17 @@ def compute_track_stats(sdf: pd.DataFrame, prob_mobile_cutoff: float = 0.5):
     Rg = np.sqrt(dists_square.mean())
     npts = len(sdf)
     # currently, a simple average of the probability is used
-    prob_mobile = sdf["prob_mobile_step"].mean()
-    movement_class = (
-        "mobile" if prob_mobile > prob_mobile_cutoff else "stationary"
-    )
+    log_pvals = np.log(sdf["p_value"]).sum()
+    motion_chi2 = -2 * log_pvals
+    ndf = 2 * sdf["p_value"].size
+    p_combined = chi2.sf(motion_chi2, ndf)
+
+    movement_class = "mobile" if p_combined < p_mobile_alpha else "stationary"
 
     return pd.Series(
         {
             "Rg": Rg,
-            "prob_mobile": prob_mobile,
+            "log_p_values": log_pvals,
             "track_length": npts,
             "motion": movement_class,
         }
@@ -174,6 +179,42 @@ def compute_msd(sdf: pd.DataFrame, dxy: float, dt: float):
         )
     else:
         return None
+
+
+def fit_imsd(imsd_df, npts=3, nremoved=2):
+    """function to fit iMSD to get 'alpha' and diffusion coefficients
+
+    Usage:
+        # compute iMSD from tracks, 'data'
+        imsd = (
+            data.groupby("particle")
+            .apply(compute_msd, dxy=0.065, dt=0.010, include_groups=False)
+            .reset_index()
+        )
+
+        particle_fits = (
+            imsd.groupby("particle")
+            .apply(fit_imsd, include_groups=False)
+            .reset_index()
+        )
+
+    """
+    x = imsd_df["lag"].values[:-nremoved]
+    y = imsd_df["MSD"].values[:-nremoved]
+    logx = np.log(x)
+    logy = np.log(y)
+    alpha, logD = np.polyfit(logx, logy, 1)
+    D_anomalous = np.exp(logD)
+    slope_3, intercept_3 = np.polyfit(x[:npts], y[:npts], 1)
+    D_conventional = slope_3 / 2.0
+
+    return pd.Series(
+        {
+            "alpha": alpha,
+            "D_general": D_anomalous,
+            "D_conventional": D_conventional,
+        }
+    )
 
 
 def fit_msds(x, y, s, ndim=2):
@@ -307,21 +348,36 @@ def combine_mean_stdev(group):
     )
 
 
-def negloglikfn(pars, x, y_obs, y_std):
+def negloglikfn_bg(pars, x, y_obs):
+    Rc, D, bg = pars
+    y = constrained_diffusion(Rc, D, x) + bg
+    return np.sum((y - y_obs) ** 2)
+
+
+def negloglikfn(pars, x, y_obs):
     Rc, D = pars
     y = constrained_diffusion(Rc, D, x)
-    return np.sum(((y - y_obs) / (y_std)) ** 2)
+    return np.sum((y - y_obs) ** 2)
 
 
-def fit_constrained_diffusion(x, y, sd, Rc0=0.2, D0=0.1):
-    p0 = (Rc0, D0)
+def fit_constrained_diffusion(x, y, Rc0=0.2, D0=0.1, bg0=1e-3, fit_bg=False):
+    if fit_bg:
+        p0 = (Rc0, D0, bg0)
+        optfun = negloglikfn_bg
+        parbounds = ((1e-4, 1.25), (1e-4, 1.25), (1e-9, 0.1))
+    else:
+        p0 = (Rc0, D0)
+        optfun = negloglikfn
+        parbounds = ((1e-4, 1.25), (1e-4, 1.25))
+
     optres = minimize(
-        negloglikfn,
+        optfun,
         p0,
-        args=(x, y, sd),
-        bounds=((1e-4, 1.25), (1e-4, 1.25)),
+        args=(x, y),
+        bounds=parbounds,
+        method="L-BFGS-B",
     )
-    return optres.x[0], optres.x[1]
+    return optres.x
 
 
 def batch_fit_constrained_model(df, group_name="source_file", max_lag=0.4):

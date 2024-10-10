@@ -255,7 +255,8 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
         points=spots_df,
         minimum_track_length=p2["minimum_track_length"],
         maximum_displacement=p2["maximum_displacement"],
-        prob_mobile_cutoff=p2["prob_mobile_cutoff"],
+        alpha_cutoff=p2["alpha_cutoff"],
+        drift_corr_smooth=p2["drift_corr_smooth"],
     )
 
     # analyze MSDs
@@ -266,7 +267,6 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
         dxy=p3["dxy"],
         dt=p3["dt"],
         n_pts_to_fit=p3["n_pts_to_fit"],
-        drift_corr_smooth=p3["drift_corr_smooth"],
     )
 
     m_D, m_D_std = msdfitres["m_D"]
@@ -291,7 +291,7 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
     shared_data["analyses"].update({group_name: {}})
     shared_data["analyses"][group_name].update({"points": spots_df})
     shared_data["analyses"][group_name].update(
-        {"tracks": link_result["tracks_df"]}
+        {"tracks": link_result["tracks_df"], "drift": link_result["drift"]}
     )
     # at the moment, no mask is supported for batch-mode
     shared_data["analyses"][group_name].update(
