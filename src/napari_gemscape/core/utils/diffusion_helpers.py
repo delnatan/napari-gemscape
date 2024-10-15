@@ -404,3 +404,67 @@ def batch_fit_constrained_model(df, group_name="source_file", max_lag=0.4):
         dpars["success"].append(optres.success)
 
     return pd.DataFrame(dpars)
+
+
+def compute_vacf(particle, max_delta=10):
+    """function to compute velocity autocorrelation
+
+    See Steph Weber's 2012 paper on 'Analytical tools to distinguish
+    the effect of localization error, confinement, and medium elasticity
+    on the velocity autocorrelation function'.
+
+    particles with not enough coordinates are omitted as delta is increased.
+
+    Args:
+        particle (pandas.DataFrame): a dataframe grouped by 'particle'.
+        max_delta (int): maximum number of 'delta' time resolution.
+
+    Returns:
+       Dataframe with 'lag', 'delta', 'normalized ACF'
+
+    Usage:
+        vacfs = data.groupby("particle").apply(compute_vacf)
+
+        vacfs is a dataframe with particle as index and columns:
+        'tau', 'delta', 'normalized ACF'
+
+
+    """
+    output = []
+
+    N = len(particle)
+
+    delta_max = min(max_delta, N - 2)
+
+    for delta in range(1, delta_max + 1):
+        vx = particle["x"].diff(periods=delta).dropna() / delta
+        vy = particle["y"].diff(periods=delta).dropna() / delta
+        nvelo = len(vx)
+        if nvelo < 2:
+            continue
+        # minimum number for computing full autocorrelation is twice n
+        ntwice = 2 * nvelo
+        # compute 'optimal' fft size
+        npow2 = 2 ** int(np.ceil(np.log2(ntwice)))
+        Vx = np.fft.rfft(vx, n=npow2)
+        Vy = np.fft.rfft(vy, n=npow2)
+        acf_x = np.fft.irfft(Vx * np.conj(Vx), n=ntwice)[:nvelo]
+        acf_y = np.fft.irfft(Vy * np.conj(Vy), n=ntwice)[:nvelo]
+        acf = acf_x + acf_y
+        acf = acf / acf[0]  # normalize so max(acf) = 1 at tau = 0
+
+        df_delta = pd.DataFrame(
+            {
+                "delta": delta,
+                "tau": np.arange(len(acf)),
+                "normalized ACF": acf,
+            }
+        )
+
+        output.append(df_delta)
+
+    if output:
+        vacf_df = pd.concat(output, ignore_index=True)
+        return vacf_df
+    else:
+        return None
