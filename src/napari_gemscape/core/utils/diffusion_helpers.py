@@ -184,6 +184,9 @@ def compute_msd(sdf: pd.DataFrame, dxy: float, dt: float):
 def fit_imsd(imsd_df, npts=3, nremoved=2):
     """function to fit iMSD to get 'alpha' and diffusion coefficients
 
+    Note: using default parameteres, it's good idea to use at least
+    tracks with >5 coordinates.
+
     Usage:
         # compute iMSD from tracks, 'data'
         imsd = (
