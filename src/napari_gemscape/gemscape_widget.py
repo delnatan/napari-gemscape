@@ -37,6 +37,7 @@ from napari_gemscape.core.utils import (
     load_dict_from_hdf5,
     load_state,
     save_state_to_hdf5,
+    viz,
 )
 
 from .widgets import (
@@ -230,6 +231,7 @@ class EasyGEMsWidget(QWidget, SharedState):
             Parameter("dxy", 0.065, min=0.01, step=0.001),
             Parameter("dt", 0.010, min=0.001, step=0.005),
             Parameter("n_pts_to_fit", 3, min=2),
+            Parameter("separate_immobile", True),
         ]
 
         self.add_shared_parameters(analysis_parameters, "analysis")
@@ -384,7 +386,8 @@ class EasyGEMsWidget(QWidget, SharedState):
             {"tracks": tracks, "drift": drift}
         )
 
-        tracks_df = tracks[["particle", "frame", "y", "x"]]
+        napari_track_columns = ["particle", "frame", "y", "x"]
+        tracks_df = tracks[napari_track_columns]
 
         if track_layer_name in self.viewer.layers:
             # replace data if already there
@@ -396,6 +399,49 @@ class EasyGEMsWidget(QWidget, SharedState):
                 name=track_layer_name,
                 tail_length=5,
                 features=tracks,
+            )
+
+        # overlay mobile/immobile
+        mobile_mask = tracks["motion"] == "mobile"
+        mobile_tracks = tracks[mobile_mask]
+        static_tracks = tracks[~mobile_mask]
+        mobile_track_layer_name = f"{mask_name + ' ' * spacer} mobile"
+        static_track_layer_name = f"{mask_name + ' ' * spacer} static"
+
+        if mobile_track_layer_name in self.viewer.layers:
+            self.viewer.layers[mobile_track_layer_name].data = mobile_tracks[
+                ["frame", "y", "x"]
+            ]
+            self.viewer.layers[
+                mobile_track_layer_name
+            ].features = mobile_tracks
+        else:
+            self.viewer.add_points(
+                mobile_tracks[["frame", "y", "x"]],
+                symbol="o",
+                face_color="transparent",
+                border_color="#00aaff",
+                size=11,
+                name=mobile_track_layer_name,
+                features=mobile_tracks,
+            )
+
+        if static_track_layer_name in self.viewer.layers:
+            self.viewer.layers[static_track_layer_name].data = static_tracks[
+                ["frame", "y", "x"]
+            ]
+            self.viewer.layers[
+                static_track_layer_name
+            ].features = static_tracks
+        else:
+            self.viewer.add_points(
+                static_tracks[["frame", "y", "x"]],
+                symbol="x",
+                face_color="transparent",
+                border_color="#ff55ff",
+                size=11,
+                name=static_track_layer_name,
+                features=static_tracks,
             )
 
     def handle_msd_fit_result(self, result):
@@ -456,89 +502,13 @@ class EasyGEMsWidget(QWidget, SharedState):
             ax1 = self.plot_widget.add_subplot(
                 name=f"{mask_name + ' ' * spacer}MSD (mobile)"
             )
-            ax1.errorbar(
-                m_msd_ens["lag"],
-                m_msd_ens["mean"],
-                yerr=m_msd_ens["std"] / np.sqrt(m_msd_ens["count"]),
-                fmt="o",
-                mec="k",
-                mew=1.25,
-                mfc="w",
-                ecolor="#b5b5b5",
-                elinewidth=1.2,
-                capsize=3,
-            )
-            ax1.plot(
-                m_msd_ens["lag"][:npts],
-                mcoefs[0] * m_msd_ens["lag"][:npts] + mcoefs[1],
-                "k--",
-                zorder=float("inf"),
-                lw=2,
-            )
-            ax1.set_title(f"D = {m_D:.3f} +/- {m_D_std:.3f} $\\mu m^2/s$")
-            ax1.set_ylabel("MSD")
-            ax1.set_xlabel("$\\tau$, seconds")
-
-            # also show trajectory counts as secondary y-axis
-            with style.context("ggplot"):
-                ax1_2 = ax1.twinx()
-
-                ax1_2.plot(
-                    m_msd_ens["lag"],
-                    m_msd_ens["count"],
-                    drawstyle="steps-mid",
-                    c="#8095ab",
-                    zorder=-10,
-                )
-                ax1_2.tick_params(
-                    axis="y", labelcolor="#8095ab", colors="#8095ab"
-                )
-                ax1_2.set_ylabel("# tracks", color="#8095ab")
-                ax1_2.grid(False)
+            viz.plot_ensemble_MSD(m_msd_ens, ax1, mcoefs, m_D, m_D_std, npts)
 
         if s_msd_ens is not None:
             ax2 = self.plot_widget.add_subplot(
                 name=f"{mask_name + ' ' * spacer}MSD (stationary)"
             )
-            ax2.errorbar(
-                s_msd_ens["lag"],
-                s_msd_ens["mean"],
-                yerr=s_msd_ens["std"] / np.sqrt(s_msd_ens["count"]),
-                fmt="o",
-                mec="k",
-                mew=1.25,
-                mfc="w",
-                ecolor="#b5b5b5",
-                elinewidth=1.2,
-                capsize=3,
-            )
-
-            ax2.plot(
-                s_msd_ens["lag"][:npts],
-                scoefs[0] * s_msd_ens["lag"][:npts] + scoefs[1],
-                "k--",
-                zorder=float("inf"),
-                lw=2,
-            )
-            ax2.set_title(f"D={s_D:.3f} +/- {s_D_std:.3f} $\\mu m^2/s$")
-            ax2.set_ylabel("MSD")
-            ax2.set_xlabel("$\\tau$, seconds")
-
-            # also show trajectory counts as a secondary y-axis
-            with style.context("ggplot"):
-                ax2_2 = ax2.twinx()
-                ax2_2.plot(
-                    s_msd_ens["lag"],
-                    s_msd_ens["count"],
-                    drawstyle="steps-mid",
-                    c="#8095ab",
-                    zorder=-10,
-                )
-                ax2_2.tick_params(
-                    axis="y", labelcolor="#8095ab", colors="#8095ab"
-                )
-                ax2_2.set_ylabel("# tracks", color="#8095ab")
-                ax2_2.grid(False)
+            viz.plot_ensemble_MSD(s_msd_ens, ax2, scoefs, s_D, s_D_std, npts)
 
     def execute_script(self):
         contents = self.script_widget.toPlainText()

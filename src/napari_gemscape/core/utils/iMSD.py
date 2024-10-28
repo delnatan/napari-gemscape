@@ -1,114 +1,75 @@
 import numpy as np
 import pandas as pd
-from numpy.fft import irfft2, rfft2
+from numpy.fft import irfftn, rfftn
 from scipy.optimize import curve_fit
-from tqdm.auto import tqdm, trange
+from tqdm.auto import trange
 
 
-def gaussian_2d(coords, A, x0, y0, sigma):
+def gaussian_2d(coords, A, x0, y0, var):
     (x, y) = coords
-    exponent = ((x - x0) ** 2 + (y - y0) ** 2) / sigma**2
+    exponent = ((x - x0) ** 2 + (y - y0) ** 2) / var
     return A * np.exp(-exponent / 2.0).ravel()
 
 
-def stics(
-    imgser: np.ndarray, upper_tau_limit: int, subtract_mean: bool = False
-) -> np.ndarray:
+def compute_spatiotemporal_correlation(
+    image_stack, max_tau, subtract_mean=False
+):
     """
-    Calculates the spatio-temporal image correlation function given a 3D image
-    series.
+    Compute the spatiotemporal correlation function g(ξ, η, τ) using FFT.
 
-    Parameters
-    ----------
-    imgser : np.ndarray
-        3D array of image series with shape (t, y, x), where:
-            - t: Number of time frames
-            - y: Number of rows (height)
-            - x: Number of columns (width)
-    upper_tau_limit : int
-        The maximum lag time (tau) to compute correlations for.
+    Parameters:
+        image_stack (ndarray): 3D array with dimensions (T, H, W), where T is
+                               time, and H, W are the spatial dimensions of the
+                               images.
+        max_tau (int): Maximum temporal lag τ to consider.
 
-    Returns
-    -------
-    timecorr : np.ndarray
-        3D array of time correlation functions with shape (y, x,
-        upper_tau_limit), where:
-            - y: Number of rows (height)
-            - x: Number of columns (width)
-            - tau: Lag time indices from 0 to upper_tau_limit-1
+    Returns:
+        ndarray: 4D array containing g(ξ, η, τ) values with dimensions
+        (max_tau, H, W).
+
     """
-    # Validate input dimensions
-    if imgser.ndim != 3:
-        raise ValueError(
-            f"imgser must be a 3D array, but has shape {imgser.shape}"
-        )
+    T, H, W = image_stack.shape
 
-    Nt, Ny, Nx = imgser.shape
-
-    # remove mean from image series
-    img_means = imgser.mean(axis=(1, 2))
+    # Mean intensity for each time frame
+    mean_intensity = np.mean(image_stack, axis=(1, 2), keepdims=True)
 
     if subtract_mean:
-        mean_removed_img = imgser - img_means[:, None, None]
+        # Subtract mean to make the calculation zero-mean (optional but can help
+        # with stability)
+        zero_mean_stack = image_stack - mean_intensity
+
+        # Fourier transform of the entire stack
+        fft_stack = rfftn(zero_mean_stack, axes=(1, 2))
     else:
-        mean_removed_img = imgser
+        fft_stack = rfftn(image_stack, axes=(1, 2))
 
-    if upper_tau_limit < 1:
-        raise ValueError("upper_tau_limit must be at least 1")
+    # Allocate space for the correlation function
+    g = np.zeros((max_tau, H, W))
 
-    # Adjust upper_tau_limit if it exceeds the temporal dimension
-    if upper_tau_limit > Nt:
-        print(
-            f"upper_tau_limit ({upper_tau_limit}) exceeds the number of time"
-            f" frames ({Nt}). "
-            f"Setting upper_tau_limit to {Nt}."
-        )
-        upper_tau_limit = Nt
+    for tau in range(1, max_tau + 1):
+        # Shift the stack by tau frames to compute correlation
+        shifted_fft = np.roll(fft_stack, -tau, axis=0)[: T - tau]
 
-    # Preallocate the timecorr array
-    # Shape: (y, x, upper_tau_limit)
-    timecorr = np.zeros((upper_tau_limit, Ny, Nx), dtype=np.float64)
-
-    # Compute FFT2 for all images over spatial dimensions (y, x)
-    # Shape of fft_imgser: (t, y, x), complex numbers
-    fft_imgser = rfft2(mean_removed_img, axes=(1, 2))
-
-    # Iterate over each tau using tqdm for the progress bar
-    for tau in tqdm(
-        range(upper_tau_limit), desc="Calculating time correlation functions"
-    ):
-        if tau >= Nt:
-            break  # No more pairs available for this tau
-
-        num_pairs = Nt - tau
-        if num_pairs <= 0:
-            # No valid pairs for this tau
-            continue
-
-        # Compute the cross-spectrum for all valid pairs at this tau
-        # Shape of cross_spectrum: (t - tau, y, x)
-        # Broadcasting is handled automatically
-        cross_spectrum = fft_imgser[:num_pairs, :, :] * np.conj(
-            fft_imgser[tau : tau + num_pairs, :, :]
+        # Compute cross-correlation using inverse FFT of the product
+        cross_corr = irfftn(
+            fft_stack[: T - tau] * np.conj(shifted_fft),
+            s=(H, W),
+            axes=(1, 2),
         )
 
-        mean_product = (
-            img_means[:num_pairs] * img_means[tau : tau + num_pairs]
-        ).mean()
+        # Average over time to get <I(x, y, t) * I(x+ξ, y+η, t+τ)>
+        avg_cross_corr = np.mean(cross_corr, axis=0)
 
-        # Compute the inverse FFT to get the cross-correlation
-        # Take the real part since the input is real
-        # Shape of cross_corr: (t - tau, y, x)
-        cross_corr = irfft2(cross_spectrum, s=(Ny, Nx), axes=(1, 2))
-        mean_cross_corr = cross_corr.mean(axis=0) / mean_product
+        # Compute the denominator (mean intensity squared, averaged over time)
+        avg_intensity_sq = np.mean(mean_intensity[: T - tau] ** 2, axis=0)
 
-        # Store the result in the timecorr array
-        timecorr[tau, :, :] = mean_cross_corr
+        # Compute g(ξ, η, τ)
+        g[tau - 1] = (avg_cross_corr / avg_intensity_sq) - 1
 
-    return timecorr
+    return g
 
 
-def extract_around_origin(xcorr: np.ndarray, w: int = 10):
+def extract_around_origin(xcorr: np.ndarray, w: int = 10, shift_origin=True):
     Nlags, Ny, Nx = xcorr.shape
 
     # take take the smallest dimension for N
@@ -116,13 +77,32 @@ def extract_around_origin(xcorr: np.ndarray, w: int = 10):
     Nhalf = N // 2
     # for region size, use the smaller size
     w = min(Nhalf - 1, w)
+
     indices = np.r_[: w + 1, -w:0]
+
+    if shift_origin:
+        indices = np.roll(indices, w)
+
     yi, xi = np.ix_(indices, indices)
 
     return xcorr[:, yi, xi], yi, xi
 
 
-def fit_gaussian_to_xcorr(xcorr: np.ndarray, w: int = 10):
+def fit_gaussian_to_xcorr(
+    xcorr: np.ndarray, w: int = 10, init_var: float = 2.0
+):
+    """
+    Fits 2D Gaussian to cross correlated image series
+
+    Parameters:
+    - xcorr, np.ndarray: the output from running STICS
+    - w, int: window 'radius' to crop around origin
+    - init_var, float: initial guess for variance
+
+    Returns:
+    pandas.DataFrame with fit results
+
+    """
     Nlags, Ny, Nx = xcorr.shape
 
     # extract subregion from xcorr
@@ -132,16 +112,65 @@ def fit_gaussian_to_xcorr(xcorr: np.ndarray, w: int = 10):
     Y, X = np.meshgrid(yi, xi, indexing="ij")
 
     # do gaussian fit to STICS images
-    fit_results = {"lag": [], "amplitude": [], "x0": [], "y0": [], "sigma": []}
+    fit_results = {
+        "lag": [],
+        "amplitude": [],
+        "x0": [],
+        "y0": [],
+        "variance": [],
+    }
 
     for lag in trange(1, Nlags + 1):
         data = g[lag - 1].ravel()
-        init_guess = (data[0], 0.0, 0.0, 1.4)
-        popt, pcov = curve_fit(gaussian_2d, (X, Y), data, p0=init_guess)
-        fit_results["lag"].append(lag)
-        fit_results["amplitude"].append(popt[0])
-        fit_results["x0"].append(popt[1])
-        fit_results["y0"].append(popt[2])
-        fit_results["sigma"].append(popt[3])
+        init_guess = (data[0], 0.0, 0.0, init_var)
+        try:
+            popt, pcov = curve_fit(
+                gaussian_2d,
+                (X, Y),
+                data,
+                p0=init_guess,
+                bounds=((-np.inf, -w, -w, 0.0), (np.inf, w, w, np.inf)),
+            )
+            fit_results["lag"].append(lag)
+            fit_results["amplitude"].append(popt[0])
+            fit_results["x0"].append(popt[1])
+            fit_results["y0"].append(popt[2])
+            fit_results["variance"].append(popt[3])
+
+        except RuntimeError:
+            continue
 
     return pd.DataFrame(fit_results)
+
+
+def create_tiled_image(arr: np.ndarray, n_cols: int) -> np.ndarray:
+    """
+    Tile a 3D NumPy array of shape (n_images, height, width) into a single 2D
+    image.
+
+    Parameters:
+    - arr: np.ndarray with shape (n_images, height, width)
+    - n_cols: Number of columns in the tiled image
+
+    Returns:
+    - Tiled 2D NumPy array
+    """
+    n_images, height, width = arr.shape
+    n_rows = (
+        n_images + n_cols - 1
+    ) // n_cols  # Ceiling division to get number of rows
+
+    # Calculate the total number of tiles needed and pad if necessary
+    total_tiles = n_rows * n_cols
+    pad_width = total_tiles - n_images
+    if pad_width > 0:
+        padding = np.zeros((pad_width, height, width), dtype=arr.dtype)
+        arr = np.concatenate([arr, padding], axis=0)
+
+    # Reshape and transpose to arrange tiles in grid
+    tiled = arr.reshape(n_rows, n_cols, height, width)
+    tiled = tiled.transpose(0, 2, 1, 3).reshape(
+        n_rows * height, n_cols * width
+    )
+
+    return tiled

@@ -98,6 +98,7 @@ def fit_msd(
     dxy=0.065,
     dt=0.01,
     n_pts_to_fit=3,
+    separate_mobile=True,
 ):
     """fit MSDs given napari `Tracks` layer"""
     if tracks is None:

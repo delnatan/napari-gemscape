@@ -11,6 +11,11 @@ from .diffusion_helpers import (
     fit_msds,
 )
 from .file_io import *
+from .iMSD import (
+    compute_spatiotemporal_correlation,
+    create_tiled_image,
+    fit_gaussian_to_xcorr,
+)
 from .miscellaneous import *
 
 __all__ = [
@@ -29,5 +34,4 @@ __all__ = [
     "print_dict_keys",
     "get_reader",
     "print_dict",
-    "hairball_plot",
 ]
