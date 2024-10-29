@@ -98,7 +98,7 @@ def fit_msd(
     dxy=0.065,
     dt=0.01,
     n_pts_to_fit=3,
-    separate_mobile=True,
+    separate_immobile=True,
 ):
     """fit MSDs given napari `Tracks` layer"""
     if tracks is None:
@@ -111,59 +111,63 @@ def fit_msd(
     else:
         return None
 
-    motion_groups = df.groupby("motion")
+    results = {}
 
-    if "mobile" in motion_groups.groups:
-        mdf = motion_groups.get_group("mobile")
-        m_msd = (
-            mdf.groupby("particle", group_keys=True)
-            .apply(compute_msd, dxy, dt)
-            .reset_index(level=0)
+    if separate_immobile:
+        results["stationary_analysis"] = analyze_msd(
+            df, dxy, dt, n_pts_to_fit=n_pts_to_fit, motion_type="stationary"
         )
-        m_msd_ens = (
-            m_msd.groupby("lag")["MSD"]
-            .agg(["mean", "std", "count"])
-            .reset_index(level=0)
-        )
-        (m_D_eff, m_D_eff_sd), (_, _), mcoefs = fit_msds(
-            m_msd_ens["lag"].values[:n_pts_to_fit],
-            m_msd_ens["mean"].values[:n_pts_to_fit],
-            m_msd_ens["std"].values[:n_pts_to_fit],
+        results["mobile_analysis"] = analyze_msd(
+            df, dxy, dt, n_pts_to_fit=n_pts_to_fit, motion_type="mobile"
         )
     else:
-        m_msd = None
-        m_msd_ens = None
-        m_D_eff, m_D_eff_sd, mcoefs = None, None, None
+        results["all_analysis"] = analyze_msd(
+            df, dxy, dt, n_pts_to_fit=n_pts_to_fit
+        )
 
-    if "stationary" in motion_groups.groups:
-        sdf = motion_groups.get_group("stationary")
-        s_msd = (
-            sdf.groupby("particle", group_keys=True)
-            .apply(compute_msd, dxy, dt)
-            .reset_index(level=0)
-        )
-        s_msd_ens = (
-            s_msd.groupby("lag")["MSD"]
-            .agg(["mean", "std", "count"])
-            .reset_index(level=0)
-        )
-        (s_D_eff, s_D_eff_sd), (_, _), scoefs = fit_msds(
-            s_msd_ens["lag"].values[:n_pts_to_fit],
-            s_msd_ens["mean"].values[:n_pts_to_fit],
-            s_msd_ens["std"].values[:n_pts_to_fit],
-        )
-    else:
-        s_msd = None
-        s_msd_ens = None
-        s_D_eff, s_D_eff_sd, scoefs = None, None, None
+    return results
+
+
+def analyze_msd(df, dxy, dt, n_pts_to_fit=3, motion_type=None):
+    """Compute MSD and effective diffusion constants for a given particle
+    subset.
+    """
+    if motion_type:
+        df = df[df["motion"] == motion_type]
+
+    if df.empty:
+        return {
+            "msd_ta": None,
+            "msd_ens": None,
+            "D_eff": None,
+            "D_eff_std": None,
+            "coefs": None,
+        }
+
+    # compute time-averaged MSD per particle
+    msd_ta = (
+        df.groupby("particle", group_keys=True)
+        .apply(compute_msd, dxy, dt)
+        .reset_index(level=0)
+    )
+
+    # compute ensemble MSD
+    msd_ens = (
+        msd_ta.groupby("lag")["MSD"]
+        .agg(["mean", "std", "count"])
+        .reset_index(level=0)
+    )
+
+    (D_eff, D_eff_sd), (_, _), coefs = fit_msds(
+        msd_ens["lag"].values[:n_pts_to_fit],
+        msd_ens["mean"].values[:n_pts_to_fit],
+        msd_ens["std"].values[:n_pts_to_fit],
+    )
 
     return {
-        "m_msd_ta": m_msd,
-        "s_msd_ta": s_msd,
-        "m_msd_ens": m_msd_ens,
-        "s_msd_ens": s_msd_ens,
-        "m_D": [m_D_eff, m_D_eff_sd],
-        "s_D": [s_D_eff, s_D_eff_sd],
-        "mcoefs": mcoefs,
-        "scoefs": scoefs,
+        "msd_ta": msd_ta,
+        "msd_ens": msd_ens,
+        "D_eff": D_eff,
+        "D_eff_sd": D_eff_sd,
+        "coefs": coefs,
     }

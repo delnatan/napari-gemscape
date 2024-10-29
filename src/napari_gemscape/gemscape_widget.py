@@ -447,7 +447,7 @@ class EasyGEMsWidget(QWidget, SharedState):
     def handle_msd_fit_result(self, result):
         """handle the conventional MSD fitting result
 
-        This generates two plots:
+        This generates two plots (if 'separate_immobile' is checked/True):
         - 'mobile' ensemble MSD plot
         - 'stationary' ensemble MSD plot
 
@@ -457,6 +457,7 @@ class EasyGEMsWidget(QWidget, SharedState):
         """
         # get input track name
         track_input = self.shared_parameters["analysis"]["tracks"]
+
         if track_input.value is None:
             return
 
@@ -473,42 +474,25 @@ class EasyGEMsWidget(QWidget, SharedState):
 
         analysis_group_name = f"{mask_name + ' ' * spacer}analysis"
 
-        # store result in class attribute
-        m_msd_ens = result["m_msd_ens"]
-        s_msd_ens = result["s_msd_ens"]
-        m_D, m_D_std = result["m_D"]
-        s_D, s_D_std = result["s_D"]
-        mcoefs = result["mcoefs"]
-        scoefs = result["scoefs"]
-
-        analysis_data = {
-            "MSD analysis": {
-                "mobile time-averaged": result["m_msd_ta"],
-                "stationary time-averaged": result["s_msd_ta"],
-                "mobile ensemble": m_msd_ens,
-                "stationary ensemble": s_msd_ens,
-                "mobile D": m_D,
-                "mobile D std": m_D_std,
-                "stationary D": s_D,
-                "stationary D std": s_D_std,
-            }
-        }
+        analysis_data = {"MSD analysis": result}
 
         self.shared_data["analyses"][analysis_group_name].update(analysis_data)
 
         npts = self.shared_parameters["analysis"]["n_pts_to_fit"].value
 
-        if m_msd_ens is not None:
-            ax1 = self.plot_widget.add_subplot(
-                name=f"{mask_name + ' ' * spacer}MSD (mobile)"
+        for key, msdres in result.items():
+            motion_str = key.split("_")[0]
+            ax = self.plot_widget.add_subplot(
+                name=f"{mask_name + ' ' * spacer}MSD ({motion_str})"
             )
-            viz.plot_ensemble_MSD(m_msd_ens, ax1, mcoefs, m_D, m_D_std, npts)
-
-        if s_msd_ens is not None:
-            ax2 = self.plot_widget.add_subplot(
-                name=f"{mask_name + ' ' * spacer}MSD (stationary)"
+            viz.plot_ensemble_MSD(
+                msdres["msd_ens"],
+                ax,
+                msdres["coefs"],
+                msdres["D_eff"],
+                msdres["D_eff_sd"],
+                npts,
             )
-            viz.plot_ensemble_MSD(s_msd_ens, ax2, scoefs, s_D, s_D_std, npts)
 
     def execute_script(self):
         contents = self.script_widget.toPlainText()
