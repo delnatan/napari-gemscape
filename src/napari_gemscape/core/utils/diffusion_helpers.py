@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.integrate import quad
-from scipy.optimize import minimize
+from scipy.optimize import least_squares, minimize
 from scipy.special import jnp_zeros
 from scipy.stats import chi2
 
@@ -175,13 +175,19 @@ def compute_msd(sdf: pd.DataFrame, dxy: float, dt: float):
             npts[i] = len(sqdist)
 
         return pd.DataFrame(
-            {"lag": lags * dt, "MSD": msdarr, "stdMSD": stdarr, "n": npts}
+            {
+                "particle": sdf.name,
+                "lag": lags * dt,
+                "MSD": msdarr,
+                "stdMSD": stdarr,
+                "n": npts,
+            }
         )
     else:
         return None
 
 
-def fit_imsd(imsd_df, npts=3, nremoved=2):
+def fit_imsd(imsd_df, npts=3):
     """function to fit iMSD to get 'alpha' and diffusion coefficients
 
     Note: using default parameteres, it's good idea to use at least
@@ -202,20 +208,65 @@ def fit_imsd(imsd_df, npts=3, nremoved=2):
         )
 
     """
-    x = imsd_df["lag"].values[:-nremoved]
-    y = imsd_df["MSD"].values[:-nremoved]
+    x = imsd_df["lag"].dropna().values
+    y = imsd_df["MSD"].dropna().values
+
     logx = np.log(x)
     logy = np.log(y)
+
     alpha, logD = np.polyfit(logx, logy, 1)
     D_anomalous = np.exp(logD)
+
     slope_3, intercept_3 = np.polyfit(x[:npts], y[:npts], 1)
     D_conventional = slope_3 / 2.0
 
     return pd.Series(
         {
+            "particle": imsd_df.name,
             "alpha": alpha,
             "D_general": D_anomalous,
             "D_conventional": D_conventional,
+        }
+    )
+
+
+def fit_imsd_robust(imsd_df, npts=3, ndim=2):
+    """function to fit iMSD to get 'alpha' and diffusion coefficients"""
+    x = imsd_df["lag"].dropna().values
+    y = imsd_df["MSD"].dropna().values
+
+    logx = np.log(x)
+    logy = np.log(y)
+
+    # do 'vanilla' / unweighted fit
+    alpha, logD = np.polyfit(logx, logy, 1)
+    D_general = np.exp(logD) / (2 * ndim)
+
+    slope_n, intercept_n = np.polyfit(x[:npts], y[:npts], 1)
+    D_conventional = slope_n / (2 * ndim)
+
+    # do 'weighted' robust fit
+    def linear_func_residuals(params, logx, logy):
+        alpha, logD = params
+        return (logy - (alpha * logx + logD)) / np.exp(logx)
+
+    optres = least_squares(
+        linear_func_residuals,
+        (0.5, logy.min()),
+        args=(logx, logy),
+        loss="soft_l1",
+    )
+    alpha_robust, logD_robust = optres.x
+    D_general_robust = np.exp(logD_robust)
+
+    return pd.Series(
+        {
+            "particle": imsd_df.name,
+            "alpha": alpha,
+            "alpha_robust": alpha_robust,
+            "D_general": D_general,
+            "D_conventional": D_conventional,
+            "D_general_robust": D_general_robust,
         }
     )
 
@@ -288,67 +339,6 @@ def constrained_diffusion(Rc, D, t):
     MSD = Rc**2 * (1 - 8 * sum_terms)
 
     return MSD
-
-
-def combine_mean_stdev(group):
-    """
-    Compute combined mean and standard deviation for grouped data.
-
-    This function calculates the combined mean, standard deviation, and total count
-    for a pandas GroupBy object containing pre-computed means, standard deviations,
-    and counts for subgroups.
-
-    Parameters:
-    ----------
-    group : pandas.core.groupby.GroupBy
-        A GroupBy object with columns:
-        - 'count': number of samples in each subgroup
-        - 'mean': mean value of each subgroup
-        - 'std': standard deviation of each subgroup
-
-    Returns:
-    -------
-    pandas.Series
-        A Series containing:
-        - 'mean': combined mean of all subgroups
-        - 'std': combined standard deviation of all subgroups
-        - 'count': total count of all samples
-
-    Notes:
-    -----
-    This function uses the following formulas for combining means and variances:
-    - Combined mean: Σ(n_i * x_i) / N
-    - Combined variance: (Σ(n_i * s_i^2) + Σ(n_i * x_i^2) - N * x_c^2) / (N - 1)
-    where n_i is the count, x_i is the mean, and s_i is the standard deviation of each subgroup,
-    N is the total count, and x_c is the combined mean.
-
-    The function assumes that the input standard deviations are sample standard deviations
-    (i.e., calculated with N-1 in the denominator).
-
-    Example:
-    -------
-    >>> df = pd.DataFrame({
-    ...     'group': ['A', 'A', 'B', 'B'],
-    ...     'count': [10, 15, 20, 25],
-    ...     'mean': [5, 7, 6, 8],
-    ...     'std': [2, 3, 2.5, 3.5]
-    ... })
-    >>> result = df.groupby('group').apply(combine_mean_stdev)
-    """
-    total_count = group["count"].sum()
-
-    # we need to 'undo' the averaging
-    x = group["count"] * group["mean"]
-    xx = group["std"] ** 2 * (group["count"] - 1) + x**2 / group["count"]
-
-    combined_mean = x.sum() / total_count
-    combined_variance = (xx.sum() - x.sum() ** 2 / total_count) / (
-        total_count - 1
-    )
-    combined_stdev = np.sqrt(combined_variance)
-    return pd.Series(
-        {"mean": combined_mean, "std": combined_stdev, "count": total_count}
-    )
 
 
 def negloglikfn_bg(pars, x, y_obs):
@@ -458,6 +448,7 @@ def compute_vacf(particle, max_delta=10):
 
         df_delta = pd.DataFrame(
             {
+                "particle": particle.name,
                 "delta": delta,
                 "tau": np.arange(len(acf)),
                 "normalized ACF": acf,
