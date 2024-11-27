@@ -273,21 +273,16 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
         n_pts_to_fit=p3["n_pts_to_fit"],
     )
 
-    m_D, m_D_std = msdfitres["m_D"]
-    s_D, s_D_std = msdfitres["s_D"]
+    analysis_data = {}
 
-    analysis_data = {
-        "MSD analysis": {
-            "mobile time-averaged": msdfitres["m_msd_ta"],
-            "stationary time-averaged": msdfitres["s_msd_ta"],
-            "mobile ensemble": msdfitres["m_msd_ens"],
-            "stationary ensemble": msdfitres["s_msd_ens"],
-            "mobile D": m_D,
-            "mobile D std": m_D_std,
-            "stationary D": s_D,
-            "stationary D std": s_D_std,
+    for key, result in msdfitres.items():
+        motion_str = key.split("_")[0]
+        analysis_data[motion_str] = {
+            "D_eff": result["D_eff"],
+            "D_eff_sd": result["D_eff_sd"],
+            "msd_ta": result["msd_ta"],
+            "msd_ens": result["msd_ens"],
         }
-    }
 
     # compile data results
     shared_data = {"analyses": {}}
