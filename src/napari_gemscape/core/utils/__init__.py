@@ -1,5 +1,4 @@
 from .diffusion_helpers import (
-    batch_fit_constrained_model,
     compute_msd,
     compute_R,
     compute_track_quantities,

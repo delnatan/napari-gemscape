@@ -176,7 +176,6 @@ def compute_msd(sdf: pd.DataFrame, dxy: float, dt: float):
 
         return pd.DataFrame(
             {
-                "particle": sdf.name,
                 "lag": lags * dt,
                 "MSD": msdarr,
                 "stdMSD": stdarr,
