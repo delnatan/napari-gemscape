@@ -14,7 +14,6 @@ import napari
 import numpy as np
 import pandas as pd
 import tifffile
-from matplotlib import style
 from qtpy.QtCore import QProcess
 from qtpy.QtWidgets import (
     QComboBox,

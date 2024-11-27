@@ -139,7 +139,7 @@ def compute_msd(sdf: pd.DataFrame, dxy: float, dt: float):
     sdf (DataFrame): with columns 'x','y','frame' and single 'track_id'.
 
     Returns:
-    DataFrame with 'lag', 'MSD', 'stdMSD', 'n'
+    DataFrame with 'particle', 'lag', 'MSD', 'stdMSD', 'n'
 
     here 'n' contains the number of points used in averaging distances
 
@@ -309,94 +309,6 @@ def fit_msds(x, y, s, ndim=2):
     loc_error_std = np.sqrt(coef_variances[1])
 
     return (D, D_std), (loc_error, loc_error_std), coefs
-
-
-def constrained_diffusion(Rc, D, t):
-    """numerical expression for diffusion in a circle
-
-    Arguments
-    =========
-    Rc (float)   : radius of confinement
-    D (float)    : diffusion coefficient
-    t (np.array) : array of time lags
-    """
-
-    tau = Rc**2 / D
-    m = 5
-    MSD = np.zeros_like(t)
-
-    # bessel function derivative first-order, m zeros
-    alpha = jnp_zeros(1, m)
-    a2 = alpha * alpha
-
-    exp_coeff = -a2[:, None] / tau  # shape (5, 1)
-    denom = a2 * (a2 - 1)  # shape (5,)
-
-    sum_terms = np.sum(
-        np.exp(exp_coeff * t) * (1 / denom[:, None]), axis=0
-    )  # shape (size(t),)
-
-    MSD = Rc**2 * (1 - 8 * sum_terms)
-
-    return MSD
-
-
-def negloglikfn_bg(pars, x, y_obs):
-    Rc, D, bg = pars
-    y = constrained_diffusion(Rc, D, x) + bg
-    return np.sum((y - y_obs) ** 2)
-
-
-def negloglikfn(pars, x, y_obs):
-    Rc, D = pars
-    y = constrained_diffusion(Rc, D, x)
-    return np.sum((y - y_obs) ** 2)
-
-
-def fit_constrained_diffusion(x, y, Rc0=0.2, D0=0.1, bg0=1e-3, fit_bg=False):
-    if fit_bg:
-        p0 = (Rc0, D0, bg0)
-        optfun = negloglikfn_bg
-        parbounds = ((1e-4, 1.25), (1e-4, 1.25), (1e-9, 0.1))
-    else:
-        p0 = (Rc0, D0)
-        optfun = negloglikfn
-        parbounds = ((1e-4, 1.25), (1e-4, 1.25))
-
-    optres = minimize(
-        optfun,
-        p0,
-        args=(x, y),
-        bounds=parbounds,
-        method="L-BFGS-B",
-    )
-    return optres.x
-
-
-def batch_fit_constrained_model(df, group_name="source_file", max_lag=0.4):
-    dpars = {group_name: [], "Rc": [], "D": [], "success": []}
-
-    # fit for every worm (1 worm in every timelapse)
-    for image_id, edf in df.groupby(group_name):
-        x_obs = edf["lag"].values
-        mask = x_obs <= max_lag
-        y_obs = edf["mean"].values[mask]
-        y_std = edf["std"].values[mask]
-        p0 = np.array((np.sqrt(y_obs.max()), 0.1))
-
-        optres = minimize(
-            negloglikfn,
-            p0,
-            args=(x_obs[mask], y_obs, y_std),
-            bounds=((1e-4, 1.2), (1e-4, 1.2)),
-        )
-
-        dpars[group_name].append(image_id)
-        dpars["Rc"].append(optres.x[0])
-        dpars["D"].append(optres.x[1])
-        dpars["success"].append(optres.success)
-
-    return pd.DataFrame(dpars)
 
 
 def compute_vacf(particle, max_delta=10):

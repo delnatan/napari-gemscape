@@ -146,9 +146,9 @@ def analyze_msd(df, dxy, dt, n_pts_to_fit=3, motion_type=None):
 
     # compute time-averaged MSD per particle
     msd_ta = (
-        df.groupby("particle", group_keys=True)
-        .apply(compute_msd, dxy, dt)
-        .reset_index(level=0)
+        df.groupby("particle")
+        .apply(compute_msd, dxy=dxy, dt=dt, include_groups=False)
+        .reset_index()
     )
 
     # compute ensemble MSD

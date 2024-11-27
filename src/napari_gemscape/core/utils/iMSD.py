@@ -12,7 +12,8 @@ def gaussian_2d(coords, A, x0, y0, var):
 
 
 def compute_spatiotemporal_correlation(
-    image_stack, max_tau, subtract_mean=False
+    image_stack,
+    max_tau,
 ):
     """
     Compute the spatiotemporal correlation function g(ξ, η, τ) using FFT.
@@ -24,27 +25,21 @@ def compute_spatiotemporal_correlation(
         max_tau (int): Maximum temporal lag τ to consider.
 
     Returns:
-        ndarray: 4D array containing g(ξ, η, τ) values with dimensions
+        ndarray: 4D array containing g(τ, ξ, η) values with dimensions
         (max_tau, H, W).
 
     """
     T, H, W = image_stack.shape
 
-    # Mean intensity for each time frame
+    # Mean intensity for each time frame. shape: (Nt,)
     mean_intensity = np.mean(image_stack, axis=(1, 2), keepdims=True)
 
-    if subtract_mean:
-        # Subtract mean to make the calculation zero-mean (optional but can help
-        # with stability)
-        zero_mean_stack = image_stack - mean_intensity
-
-        # Fourier transform of the entire stack
-        fft_stack = rfftn(zero_mean_stack, axes=(1, 2))
-    else:
-        fft_stack = rfftn(image_stack, axes=(1, 2))
+    fft_stack = rfftn(image_stack, axes=(1, 2))
 
     # Allocate space for the correlation function
     g = np.zeros((max_tau, H, W))
+
+    # time-averaged for denominator calculation
 
     for tau in range(1, max_tau + 1):
         # Shift the stack by tau frames to compute correlation
@@ -57,14 +52,20 @@ def compute_spatiotemporal_correlation(
             axes=(1, 2),
         )
 
-        # Average over time to get <I(x, y, t) * I(x+ξ, y+η, t+τ)>
-        avg_cross_corr = np.mean(cross_corr, axis=0)
+        # denominator
+        denominator = (
+            mean_intensity[: T - tau]
+            * np.roll(mean_intensity, -tau)[: T - tau]
+        )
+        # Average over time to get <I(t, y, x) * I(t+τ, y+η, x+ξ)>
+        # numerator to the STICS equation
+        avg_cross_corr = np.mean(cross_corr / denominator, axis=0)
 
         # Compute the denominator (mean intensity squared, averaged over time)
-        avg_intensity_sq = np.mean(mean_intensity[: T - tau] ** 2, axis=0)
+        # avg_intensity_sq = np.mean(mean_intensity[: T - tau] ** 2, axis=0)
 
         # Compute g(ξ, η, τ)
-        g[tau - 1] = (avg_cross_corr / avg_intensity_sq) - 1
+        g[tau - 1] = avg_cross_corr / H / W - 1.0
 
     return g
 
