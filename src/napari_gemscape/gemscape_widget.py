@@ -709,7 +709,9 @@ if __name__ == "__main__":
     plot_widget = StackedPlotWidget()
     # assign plot_widget to 'myWidget'
     myWidget.plot_widget = plot_widget
-    viewer.window.add_dock_widget(myWidget, name="Easy GEMs")
-    viewer.window.add_dock_widget(plot_widget, name="Plots")
+    viewer.window.add_plugin_dock_widget(myWidget, name="Easy GEMs")
+    viewer.window.add_plugin_dock_widget(
+        plot_widget, name="Plots", tabify=True
+    )
 
     napari.run()

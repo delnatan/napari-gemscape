@@ -97,6 +97,10 @@ def compile_tracks(hdf5_files):
                     )
                     df.insert(0, "source_file", file.stem)
 
+                    # re-assign particle ids
+                    unique_particle_ids = pd.factorize(df["particle"])[0] + 1
+                    df["particle"] = unique_particle_ids
+
                     if analysis_type not in analysis_dict:
                         analysis_dict[analysis_type] = []
                     analysis_dict[analysis_type].append(df)
@@ -388,7 +392,7 @@ def process_files(task, file_list, config):
 
             # make each particle ID unique
             particle_max = coldf.groupby("source_file")["particle"].max()
-            offset = (particle_max + 1).cumsum().shift(fill_value=0)
+            offset = particle_max.cumsum().shift(fill_value=0)
             # do merge to ensure offset is applied to corresponding particle
             coldf = coldf.merge(
                 offset.rename("offset"), on="source_file", how="left"
