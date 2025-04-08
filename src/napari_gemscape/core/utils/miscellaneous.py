@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import imageio
@@ -6,6 +7,9 @@ import numpy as np
 from magicgui import magic_factory
 from matplotlib.patches import Circle
 from napari import Viewer
+from qtpy.QtWidgets import QApplication
+
+process_events = QApplication.processEvents
 
 
 @magic_factory(mp4_output_path={"widget_type": "FileEdit", "mode": "w"})
@@ -22,13 +26,6 @@ def record_timelapse_movie(
     dimension is the time axis.
 
     """
-    frames = []
-
-    for t in range(t_start, t_end + 1):
-        viewer.dims.current_step = (t, 0, 0)
-        frame = viewer.screenshot(flash=False)
-        frames.append(frame)
-
     writer = imageio.get_writer(
         mp4_output_path,
         fps=fps,
@@ -37,7 +34,12 @@ def record_timelapse_movie(
         output_params=["-metadata", f"title={movie_title}"],
     )
 
-    for frame in frames:
+    for t in range(t_start, t_end + 1):
+        viewer.dims.current_step = (t, 0, 0)
+        process_events()
+        time.sleep(0.150)
+        frame = viewer.screenshot(flash=False, canvas_only=True)
+
         # ensure divisibility by 2
         M, N = frame.shape[:2]
         M = M // 2 * 2
