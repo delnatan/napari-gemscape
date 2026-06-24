@@ -101,7 +101,7 @@ def read_imaris_timelapse(path: Path) -> LayerData:
         timepoints = []
 
         for t in range(Nt):
-            _attrstr = f"TimePoint{t+1:d}"
+            _attrstr = f"TimePoint{t + 1:d}"
             _timestr = b"".join(
                 fhd["DataSetInfo"]["TimeInfo"].attrs[_attrstr]
             ).decode("utf-8")
@@ -211,11 +211,10 @@ def save_dict_to_hdf5(hdf_file: h5py.File, d: dict, parent_group="/"):
         elif isinstance(value, (int, float, str, bool)):
             hdf_file[parent_group].attrs[key] = value
         elif isinstance(value, pd.DataFrame):
-            object_columns = value.columns[value.dtypes == "object"]
-            if len(object_columns) > 0:
-                for column in object_columns:
-                    value[column] = value[column].astype("S16")
-            hdf_file[parent_group + key] = value.to_records(index=False)
+            df = value.copy()
+            for col in df.select_dtypes(include=["object"]).columns:
+                df[col] = df[col].astype("S16")
+            hdf_file[parent_group + key] = df.to_records(index=False)
         elif isinstance(value, np.ndarray):
             hdf_file[parent_group + key] = value
         elif value is None:
