@@ -109,7 +109,6 @@ class EasyGEMsWidget(QWidget, SharedState):
         inputLayout.addWidget(self.fileListWidget)
 
         self.batchTaskChoices = QComboBox()
-        self.batchTaskChoices.addItem("test")
         self.batchTaskChoices.addItem("analyse GEMs")
         self.batchTaskChoices.addItem("compile MSDs")
         self.batchTaskChoices.addItem("compile summaries")
@@ -615,12 +614,6 @@ class EasyGEMsWidget(QWidget, SharedState):
                 str(item.file_path.resolve())
                 for item in self.fileListWidget.items()
                 if item.status == "complete"
-            ]
-        elif task == "test":
-            flist = [
-                str(item.file_path.resolve())
-                for item in self.fileListWidget.items()
-                if item.get_status() not in ["skip", "complete"]
             ]
         else:
             # otherwise just give the entire list (the checking should

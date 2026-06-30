@@ -8,7 +8,6 @@ to 100.
 import argparse
 import json
 import sys
-import time
 from pathlib import Path
 
 try:
@@ -223,15 +222,7 @@ def analyze_single_timelapse(file_in, timelapse, parameters, mask_file=None):
 def process_files(task, file_list, config):
     total_files = len(file_list)
 
-    if task == "test":
-        for i, fn in enumerate(file_list, 1):
-            time.sleep(0.5)
-            print(f"PROGRESS:{int(i / total_files * 100)}")
-            sys.stdout.flush()
-            print(f"Processing {fn}")
-            sys.stdout.flush()
-
-    elif task == "analyse GEMs":
+    if task == "analyse GEMs":
         print("analyzing GEMs -- batch mode")
         print("using parameters: ")
         print(config)
