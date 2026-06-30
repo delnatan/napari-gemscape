@@ -473,9 +473,18 @@ class EasyGEMsWidget(QWidget, SharedState):
 
         analysis_group_name = f"{mask_name + ' ' * spacer}analysis"
 
-        analysis_data = {"MSD analysis": result}
-
-        self.shared_data["analyses"][analysis_group_name].update(analysis_data)
+        msd_group = {}
+        for key, msdres in result.items():
+            motion_str = key.split("_")[0]  # 'mobile' or 'stationary'
+            if msdres["msd_ens"] is not None:
+                msd_group[f"{motion_str} ensemble"] = msdres["msd_ens"]
+            if msdres["msd_ta"] is not None:
+                msd_group[f"{motion_str} time-averaged"] = msdres["msd_ta"]
+            if msdres["D_eff"] is not None:
+                msd_group[f"{motion_str} D"] = msdres["D_eff"]
+            if msdres["D_eff_sd"] is not None:
+                msd_group[f"{motion_str} D std"] = msdres["D_eff_sd"]
+        self.shared_data["analyses"][analysis_group_name]["MSD analysis"] = msd_group
 
         npts = self.shared_parameters["analysis"]["n_pts_to_fit"].value
 
@@ -665,7 +674,7 @@ class EasyGEMsWidget(QWidget, SharedState):
 
     def batch_process_started(self):
         self.batchProcessButton.setText("Stop it!")
-        self.batchProcessButton.disconnect()
+        self.batchProcessButton.clicked.disconnect(self.start_batch_process)
         self.batchProcessButton.clicked.connect(self.stop_batch_process)
 
     def handle_batch_stdout(self):
@@ -681,7 +690,7 @@ class EasyGEMsWidget(QWidget, SharedState):
     def batch_processing_finished(self):
         self.batchProgressBar.setValue(100)
         self.batchProcessButton.setText("Do it!")
-        self.batchProcessButton.disconnect()
+        self.batchProcessButton.clicked.disconnect(self.stop_batch_process)
         self.batchProcessButton.clicked.connect(self.start_batch_process)
 
     def handle_batch_stderr(self):
