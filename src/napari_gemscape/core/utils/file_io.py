@@ -293,7 +293,7 @@ def load_dict_from_hdf5(hdf_file: h5py.File, parent_group="/") -> dict:
                 d[key] = np.array(value)
 
     for key, value in hdf_file[parent_group].attrs.items():
-        d[key] = value
+        d[key] = value.item() if isinstance(value, np.generic) else value
 
     return d
 
